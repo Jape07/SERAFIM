@@ -1,6 +1,6 @@
 # Who owns each folder. Owners are asked to review PRs that touch their folder.
-# When everyone has accepted the invite, replace DATA_USER and WEB_USER with
-# their GitHub usernames (with an @ in front) and uncomment those lines.
+# When the web teammate accepts the invite, replace WEB_USER with their GitHub
+# username (with an @ in front), uncomment the web line and add them to the contract.
 
 # AI & validation
 /serafim/validation/   @Jape07
@@ -9,15 +9,15 @@
 /models/               @Jape07
 
 # Data engineering
-# /serafim/bronze/     DATA_USER
-# /serafim/silver/     DATA_USER
-# /serafim/gold/       DATA_USER
-# /serafim/cli.py      DATA_USER
-# /config/             DATA_USER
-# /.github/workflows/  DATA_USER
+/serafim/bronze/       @Isralejo117
+/serafim/silver/       @Isralejo117
+/serafim/gold/         @Isralejo117
+/serafim/cli.py        @Isralejo117
+/config/               @Isralejo117
+/.github/workflows/    @Isralejo117
 
 # Web
 # /web/                WEB_USER
 
-# Gold contract: the whole team
-# /serafim/contract.py @Jape07 DATA_USER WEB_USER
+# Gold contract: the whole team (add WEB_USER when they join)
+/serafim/contract.py   @Jape07 @Isralejo117
