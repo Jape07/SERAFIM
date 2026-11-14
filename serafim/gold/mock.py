@@ -345,3 +345,29 @@ def write_mock_gold(gold_dir: Path, config: dict) -> MockGold:
         len(gold.pngs),
     )
     return gold
+
+
+def write_all_regions(gold_dir: Path, config: dict) -> None:
+    """Simulated gold for every region in the config, for the published site.
+
+    ``write_mock_gold`` stays one region: that is what task D1 checks.
+    """
+    size_deg = config["settings"]["cutout_size_deg"]
+    pieces = [build_mock(region, size_deg) for region in config["regions"]]
+    tables = {
+        name: pd.concat([piece.tables[name] for piece in pieces], ignore_index=True)
+        for name in contract.GOLD_TABLES
+    }
+    gold_dir = Path(gold_dir)
+    for piece in pieces:
+        for path, png in piece.pngs.items():
+            target = gold_dir / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            mpimg.imsave(target, png.data, cmap=png.cmap, vmin=png.vmin, vmax=png.vmax)
+    write_gold(gold_dir, tables, build_meta(n_frames=len(tables["frames.parquet"])))
+    log.info(
+        "simulated gold for %d regions in %s (%d frames)",
+        len(pieces),
+        gold_dir,
+        len(tables["frames.parquet"]),
+    )
