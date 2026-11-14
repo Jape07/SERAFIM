@@ -39,7 +39,7 @@ SERAFIM/
 │  ├─ bronze/               download from IRSA (data engineering)
 │  ├─ silver/               cleaning, alignment, subtraction and detection (data engineering)
 │  ├─ gold/                 tables, PNG and export (data engineering)
-│  ├─ validation/           catalogs.py and status.py (AI & validation)
+│  ├─ validation/           targets.py, catalogs.py and status.py (AI & validation)
 │  ├─ ai/                   predict.py, CNN inference with ONNX (AI & validation)
 │  ├─ contract.py           gold schemas (whole team)
 │  └─ cli.py                python -m serafim
@@ -50,7 +50,8 @@ SERAFIM/
 │  ├─ js/data.js, js/viewer.js, js/home.js, js/catalog.js
 │  ├─ texts/examples.json   guided example texts (written by AI & validation)
 │  └─ gold/                 local copy of gold (git-ignored)
-├─ config/regions.yaml      the 3 watched regions and every pipeline setting
+├─ config/targets.yaml      the 5 challenge targets (python -m serafim.validation.targets)
+├─ config/regions.yaml      the old 3 watched regions; removed when the pipeline moves to targets
 ├─ models/                  final ONNX model (AI & validation)
 ├─ tests/                   tests and a tiny FITS fixture
 ├─ data/                    local bronze, silver, gold, dataset and catalog cache (git-ignored)
