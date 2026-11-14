@@ -1,6 +1,7 @@
-"""Validation (AI & validation): decide what each change found by the pipeline is.
+"""Validation (AI & validation): the challenge targets and what is known about them.
 
-- catalogs.py: SkyBoT, SIMBAD and Gaia queries with an on-disk cache (task A1).
-- status.py: `classify()`, pure rules that group detections into objects and
-  give each one a status and a reason (task A3).
+- targets.py: the 5 challenge targets in config/targets.yaml, plus `propagate()` and
+  `split_seasons()`, shared with the pipeline (task A1).
+- catalogs.py: SkyBoT, SIMBAD and Gaia queries with an on-disk cache.
+- status.py: `classify()`, only for the optional candidate layer (extra task A9).
 """

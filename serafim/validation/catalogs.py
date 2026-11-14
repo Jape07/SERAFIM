@@ -172,6 +172,11 @@ def _query_simbad(center: SkyCoord, radius: Angle) -> tuple[Table, str]:
         FROM basic LEFT JOIN allfluxes ON basic.oid = allfluxes.oidref
         WHERE CONTAINS(POINT('ICRS', basic.ra, basic.dec), {_adql_circle(center, radius)}) = 1
     """
+    return _run_simbad(adql)
+
+
+def _run_simbad(adql: str) -> tuple[Table, str]:
+    """Run ADQL on the first SIMBAD server that answers; also return which one answered."""
     errors = []
     for server in SIMBAD_TAP_SERVERS:
         try:
