@@ -1,6 +1,7 @@
 """The repo skeleton every role builds on: config, modules and CLI."""
 
 import importlib
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,25 @@ def test_config_has_the_pole():
 def test_region_ids_are_unique():
     ids = [r["id"] for r in load_config()["regions"]]
     assert len(ids) == len(set(ids))
+
+
+def test_the_three_watched_regions():
+    assert [r["id"] for r in load_config()["regions"]] == ["pole", "asteroid", "variable_star"]
+
+
+@pytest.mark.parametrize("region", load_config()["regions"], ids=lambda r: r["id"])
+def test_region_is_complete(region):
+    assert {"id", "name", "ra", "dec", "why"} <= set(region)
+    assert 0 <= region["ra"] < 360
+    assert -90 <= region["dec"] <= 90
+
+
+@pytest.mark.parametrize("region", load_config()["regions"], ids=lambda r: r["id"])
+def test_key_window_is_two_ordered_utc_dates(region):
+    if "key_window_utc" not in region:
+        pytest.skip("no key window")
+    start, end = (date.fromisoformat(str(day)) for day in region["key_window_utc"])
+    assert start <= end
 
 
 @pytest.mark.parametrize(

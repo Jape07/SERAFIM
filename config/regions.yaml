@@ -6,9 +6,14 @@ settings:
   max_frames_per_region: 60        # Plan B: drop to 30 if reprojection is too slow
   parallel_downloads: 8            # Be nice to IRSA: never more than 8 at once
   retries: 3
-  # Confirm in task D2 with Irsa.list_collections(servicetype="SIA", filter="spherex").
+  # Checked with Irsa.list_collections(servicetype="SIA", filter="spherex") on 2026-11-14:
+  # spherex_dr1, spherex_qr3 and their *_deep versions (spherex_dr1_cube is not used).
   # If an exposure is in both, keep DR1.
   collections: [spherex_dr1, spherex_qr3]
+  # key_window_utc: [first, last] UTC days, both included. When a region has more frames
+  # than max_frames_per_region, take the frames inside the window first (spread evenly in
+  # time if they alone are over the cap), then fill up with frames from other visits:
+  # those are the references for the difference images.
   detection:
     threshold_sigma: 5             # Plan B: 7 if subtractions are too noisy
     min_area_px: 3
@@ -24,15 +29,28 @@ regions:
     use_deep_collections: true     # Also search the *_deep versions of the collections
     why: Deep field that SPHEREx observes every orbit; it has the longest time series.
 
-  # Regions 2 and 3 are chosen by AI & validation in task A2 (PR to this file).
-  # - id: asteroid
-  #   name: ...
-  #   ra: ...
-  #   dec: ...
-  #   why: Field near the ecliptic crossed by a bright known asteroid (V < 16).
-  #
-  # - id: variable_star
-  #   name: ...
-  #   ra: ...
-  #   dec: ...
-  #   why: Known variable star that does not saturate the detector; months-long changes.
+  # Regions 2 and 3 chosen in task A2: the most usable data, then a recognizable name.
+  - id: asteroid
+    name: (26) Proserpina crossing
+    ra: 188.6274
+    dec: -2.3551
+    key_window_utc: ["2026-05-31", "2026-06-05"]
+    why: >-
+      Main-belt asteroid (26) Proserpina (V 11.7-11.8) crosses this field during the
+      SPHEREx visit of 2026-05-31 to 2026-06-05: 40 frames (0.93-4.71 um) have it inside
+      the 0.5 deg cutout, confirmed with SkyBoT and JPL Horizons. Another 156 frames from
+      the 2025-05/07 and 2025-12/2026-01 visits do not have it and serve as references.
+      No OVERFLOW or NONLINEAR flags on its pixel.
+
+  - id: variable_star
+    name: Mira variable ATO J273.5501+64.6628
+    ra: 273.5502
+    dec: 64.6628
+    use_deep_collections: true
+    key_window_utc: ["2025-04-24", "2026-10-04"]
+    why: >-
+      Mira variable (SIMBAD type Mi*, period ~159 days, 2MASS K = 9.9) 2.4 deg from the
+      ecliptic pole, inside the SPHEREx deep field: ~11,000 frames in every month from
+      2025-04 to 2026-10 (0.75-4.41 um), about 3.5 pulsation cycles. Its peak pixel at
+      1.38 um changes by a factor of ~2.3 between months. No OVERFLOW or NONLINEAR flags
+      on its pixel in 9 frames spread over 19 months.
