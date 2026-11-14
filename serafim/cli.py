@@ -23,6 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     mock = commands.add_parser("mock", help="Write simulated gold to data/gold/ (task D1).")
     mock.add_argument("--out", default="data/gold", help="Gold folder (default: data/gold).")
+    mock.add_argument(
+        "--all-regions",
+        action="store_true",
+        help="Write every region in config/regions.yaml (the published site).",
+    )
 
     bronze_cmd = commands.add_parser(
         "bronze", help="Download IRSA cutouts to data/bronze/ (task D2)."
@@ -47,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     if args.command == "mock":
-        return mock(Path(args.out))
+        return mock(Path(args.out), all_regions=args.all_regions)
     if args.command == "bronze":
         return bronze(args.region)
     log.error("Command '%s' is not implemented yet (task D8).", args.command)
@@ -66,11 +71,14 @@ def bronze(region_id: str | None) -> int:
     return 0
 
 
-def mock(gold_dir: Path) -> int:
+def mock(gold_dir: Path, *, all_regions: bool = False) -> int:
     """Simulated gold, checked against the contract like real gold will be."""
-    from serafim.gold.mock import write_mock_gold  # matplotlib only loads when needed
+    from serafim.gold.mock import write_all_regions, write_mock_gold
 
-    write_mock_gold(gold_dir, load_config())
+    if all_regions:
+        write_all_regions(gold_dir, load_config())
+    else:
+        write_mock_gold(gold_dir, load_config())
     try:
         contract.validate_gold(gold_dir)
     except contract.GoldValidationError as error:

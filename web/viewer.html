@@ -1,1 +1,14 @@
-<!-- Task W3-W6 (web): time viewer. URL: viewer.html?region=<id>&frame=<id> -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Visor · SERAFIM</title>
+  <script>
+    const hash = location.hash && location.hash !== "#" ? location.hash : "#visor";
+    location.replace("index.html" + location.search + hash);
+  </script>
+</head>
+<body>
+  <p><a href="index.html#visor">Abrir el visor</a></p>
+</body>
+</html>

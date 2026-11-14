@@ -1,1 +1,300 @@
-<!-- Task W1/W7 (web): home page, sky map with the 3 regions and the guided examples. -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SERAFIM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0,0&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="index.html">
+        <span class="mark-logo" aria-hidden="true"><span class="material-symbols-outlined">blur_on</span></span>
+        <span><strong>SERAFIM</strong><small>Inspirado en NASA SPHEREx</small></span>
+      </a>
+      <nav class="nav" aria-label="Secciones">
+        <a href="#visor">Explorar</a>
+        <a href="#comparador">Comparar</a>
+        <a href="#comparador">Detectar</a>
+        <a href="#regiones">Regiones</a>
+        <a href="#creador-gif">Compartir</a>
+        <a href="#catalogo">Catálogo</a>
+      </nav>
+      <div class="tools">
+        <span class="chip"><span class="sun" aria-hidden="true"><span class="material-symbols-outlined">light_mode</span></span><span>Modo claro</span></span>
+        <button class="ghost" id="help-open" type="button"><span class="material-symbols-outlined">help</span> Ayuda rápida</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="pill"><span class="dot"></span> Plataforma abierta de observación temporal astronómica</div>
+      <h1>Explora cómo cambia el cielo</h1>
+      <p>Descubre asteroides, estrellas variables y cambios en el universo comparando imágenes tomadas en distintas fechas.</p>
+      <a class="primary" href="#visor"><span class="material-symbols-outlined">explore</span> Explorar observaciones</a>
+    </section>
+
+    <section class="metrics" aria-labelledby="resumen-title">
+      <div class="band-inner">
+        <div class="row-between">
+          <span class="eyebrow" id="resumen-title">Resumen general de datos</span>
+          <span class="live"><span class="dot"></span> <span id="updated">Cargando las tablas…</span></span>
+        </div>
+        <div class="grid-4">
+          <article class="stat">
+            <header><span>Objetos conocidos</span><span class="tag green">Catálogo oficial</span></header>
+            <div class="num" id="stat-known">—</div>
+            <p>Identificados y cotejados con bases astronómicas.</p>
+          </article>
+          <article class="stat warm">
+            <header><span>Candidatos sin identificar</span><span class="tag amber">Requieren revisión</span></header>
+            <div class="num" id="stat-candidate">—</div>
+            <p>Posibles asteroides o fenómenos transitorios. Un candidato no es un objeto nuevo.</p>
+          </article>
+          <article class="stat">
+            <header><span>Objetos descartados</span><span class="tag">Ruido y artefactos</span></header>
+            <div class="num" id="stat-discarded">—</div>
+            <p>Falsos positivos, destellos y bordes de la imagen.</p>
+          </article>
+          <article class="stat">
+            <header><span>Imágenes analizadas</span><span class="tag indigo">Cobertura publicada</span></header>
+            <div class="num indigo-text" id="stat-frames">—</div>
+            <p>Exposiciones publicadas de las regiones vigiladas.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="visor">
+      <div class="split-head">
+        <div>
+          <span class="kicker">Explorador interactivo</span>
+          <h2>Visor principal del cielo</h2>
+        </div>
+        <p>Haz clic en un marcador para inspeccionar el objeto. La línea de tiempo recorre las exposiciones reales de la región.</p>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="sky">
+            <img id="frame" alt="Exposición SPHEREx de la región seleccionada">
+            <svg id="marks" xmlns="http://www.w3.org/2000/svg"></svg>
+            <span class="badge tl" id="sector">Cargando región…</span>
+          </div>
+          <div class="legend">
+            <span class="label">Leyenda</span>
+            <span><i class="swatch known"></i>Conocido</span>
+            <span><i class="swatch candidate"></i>Candidato sin identificar</span>
+            <span><i class="swatch discarded">×</i>Descartado</span>
+          </div>
+          <div class="controls">
+            <button class="primary play" id="play" type="button">Reproducir</button>
+            <label>Fotograma <input class="slider" id="slider" type="range" min="0" max="0" value="0"></label>
+            <label><input id="diff" type="checkbox"> Diferencia</label>
+            <label><input id="discarded" type="checkbox" checked> Mostrar descartados</label>
+          </div>
+          <p class="hint" id="caption"></p>
+        </div>
+        <aside class="panel" id="panel">
+          <div class="row-between">
+            <div>
+              <span class="tag amber" id="panel-status">Selecciona un marcador</span>
+              <h3 id="panel-name">Ningún objeto elegido</h3>
+            </div>
+            <div class="tag green" id="panel-prob" hidden></div>
+          </div>
+          <div class="facts">
+            <div><span class="label">Fecha</span><strong id="panel-date">—</strong></div>
+            <div><span class="label">Tipo</span><strong id="panel-type">—</strong></div>
+            <div><span class="label">Región</span><strong id="panel-region">—</strong></div>
+          </div>
+          <div class="notes" id="panel-notes"><span>Los detalles aparecen al elegir un marcador del visor.</span></div>
+          <div class="compare-box">
+            <div class="row-between">
+              <strong>Comparación temporal</strong>
+              <span class="tag indigo" id="panel-span">Intervalo: —</span>
+            </div>
+            <div class="dates">
+              <div><span class="label">Actual</span><strong id="panel-now">—</strong></div>
+              <div><span class="label">Comparativa</span><strong id="panel-then">—</strong></div>
+            </div>
+            <div class="deltas">
+              <div><span class="label">Movimiento</span><strong id="panel-move">—</strong></div>
+              <div><span class="label">Longitud</span><strong id="panel-wave">—</strong></div>
+              <div><span class="label">Posición</span><strong id="panel-place">—</strong></div>
+            </div>
+          </div>
+          <div class="actions">
+            <a class="primary" href="#comparador"><span class="material-symbols-outlined">compare_arrows</span> Comparar imágenes</a>
+            <button class="ghost" id="blink-jump" type="button"><span class="material-symbols-outlined">motion_photos_auto</span> Activar blink</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="band" id="comparador">
+      <div class="band-inner">
+        <div class="section-head">
+          <div>
+            <span class="kicker warm-kicker">Herramienta unificada</span>
+            <h2>Comparación temporal y detección de cambios</h2>
+            <p class="intro">Compara dos capturas del mismo sector y revisa lo que cambia entre la primera exposición y la que está en el visor.</p>
+          </div>
+          <div class="controls">
+            <button class="ghost" id="blink" type="button"><span class="material-symbols-outlined">motion_photos_auto</span> Alternar / blink</button>
+            <span class="label">Velocidad</span>
+            <div class="choice" id="blink-speed">
+              <button type="button" data-ms="1200">0.5×</button>
+              <button type="button" data-ms="600" aria-pressed="true">1×</button>
+              <button type="button" data-ms="300">2×</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <article class="photo current">
+            <header>
+              <span class="frame-title"><span class="dot"></span> <span id="cmp-now-label">Fotografía actual</span></span>
+              <span class="tag amber">Reciente</span>
+            </header>
+            <div class="sky"><img id="cmp-now" alt="Exposición reciente"></div>
+          </article>
+          <article class="photo">
+            <header>
+              <span class="frame-title"><span class="dot"></span> <span id="cmp-then-label">Fotografía comparativa</span></span>
+              <span class="tag">Base anterior</span>
+            </header>
+            <div class="sky"><img id="cmp-then" alt="Exposición de referencia"></div>
+          </article>
+        </div>
+        <div class="sheet">
+          <div class="row-between">
+            <h3>Resultado de la comparación</h3>
+            <span class="tag" id="cmp-count">Calculando…</span>
+          </div>
+          <div class="grid-3" style="margin-top: 0.8rem">
+            <article class="event new">
+              <div><strong id="event-new-title">Candidatos en la fecha reciente</strong><p id="event-new">—</p></div>
+              <span class="foot amber-text" id="event-new-foot"></span>
+            </article>
+            <article class="event">
+              <div><strong>Movimiento observado</strong><p id="event-move">—</p></div>
+              <span class="foot" id="event-move-foot"></span>
+            </article>
+            <article class="event">
+              <div><strong>Imagen diferencia</strong><p id="event-diff">—</p></div>
+              <span class="foot" id="event-diff-foot"></span>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="regiones">
+      <span class="kicker">Navegación guiada</span>
+      <h2>Regiones de exploración</h2>
+      <p class="intro">Selecciona el cielo que quieres inspeccionar. Cada tarjeta carga sus exposiciones en el visor.</p>
+      <div class="grid-3" id="region-cards"></div>
+    </section>
+
+    <section class="band" id="creador-gif">
+      <div class="band-inner">
+        <span class="kicker warm-kicker">Ciencia ciudadana y difusión</span>
+        <h2>Creador de GIF de movimiento cósmico</h2>
+        <p class="intro">Arma una animación corta con las exposiciones de la región activa para compartir el recorrido.</p>
+        <div class="gif-layout">
+          <div class="gif-controls">
+            <div>
+              <div class="label">Cantidad de imágenes</div>
+              <div class="choice" id="gif-count">
+                <button type="button" data-n="2">2 imágenes</button>
+                <button type="button" data-n="4" aria-pressed="true">4 imágenes</button>
+                <button type="button" data-n="8">8 imágenes</button>
+              </div>
+            </div>
+            <div>
+              <div class="label">Velocidad de reproducción</div>
+              <div class="choice" id="gif-speed">
+                <button type="button" data-ms="800">Lento</button>
+                <button type="button" data-ms="450" aria-pressed="true">Normal</button>
+                <button type="button" data-ms="220">Rápido</button>
+              </div>
+            </div>
+            <div class="duration" id="gif-duration">Duración calculada: —</div>
+            <button class="amber wide" id="gif-make" type="button"><span class="material-symbols-outlined">play_circle</span> Generar GIF</button>
+            <button class="ghost wide" id="gif-save" type="button" disabled><span class="material-symbols-outlined">download</span> Descargar GIF</button>
+            <p class="hint" id="gif-note"></p>
+          </div>
+          <div>
+            <div class="sky">
+              <img id="gif-preview" alt="Vista previa de la animación">
+              <span class="badge tl">Vista previa animada</span>
+              <span class="badge br">Repetición automática</span>
+            </div>
+            <p class="hint">La vista previa recorre las exposiciones publicadas de la región que está en el visor.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="catalogo">
+      <div class="section-head">
+        <div>
+          <span class="kicker">Registro general</span>
+          <h2>Catálogo de objetos</h2>
+          <p class="intro" id="catalog-status">Cargando el catálogo…</p>
+        </div>
+        <a class="ghost" id="csv" href="gold/objects.csv"><span class="material-symbols-outlined">download</span> Descargar CSV</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Objeto</th>
+              <th>Estado</th>
+              <th>Región</th>
+              <th>Fecha</th>
+              <th class="right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-inner">
+      <div>
+        <div><strong>SERAFIM</strong> · Ciencia abierta ciudadana</div>
+        <p>Plataforma de visualización temporal inspirada en los datos públicos de NASA SPHEREx. Las exposiciones de este sitio son el oro publicado: tres regiones vigiladas, hasta que los recortes reales reemplacen la simulación.</p>
+        <p class="credit">Datos de la misión SPHEREx de NASA, servidos por IRSA en IPAC (Caltech).</p>
+      </div>
+      <nav aria-label="Pie">
+        <a href="#visor">Explorador</a>
+        <a href="#comparador">Comparador temporal</a>
+        <a href="#regiones">Regiones</a>
+        <a href="#creador-gif">Creador de GIF</a>
+        <a href="#catalogo">Catálogo</a>
+        <a href="about.html">Créditos</a>
+      </nav>
+    </div>
+  </footer>
+
+  <dialog id="help">
+    <h2>Ayuda rápida</h2>
+    <ol>
+      <li>Elige una región y recorre sus exposiciones con reproducir.</li>
+      <li>El rombo naranja es un candidato sin identificar. No es un objeto nuevo.</li>
+      <li>El comparador muestra la primera exposición junto a la del visor.</li>
+      <li>El GIF usa esas mismas exposiciones publicadas.</li>
+    </ol>
+    <button class="ghost" id="help-close" type="button">Cerrar</button>
+  </dialog>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
