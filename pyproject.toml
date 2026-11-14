@@ -22,6 +22,8 @@ dependencies = [
     "imageio==2.38.1",
     "onnxruntime==1.32.0",
     "pyyaml==6.0.3",
+    "pyvo==1.10.0",
+    "requests==2.34.2",
 ]
 
 [project.optional-dependencies]
@@ -54,4 +56,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Tests that query real services (SkyBoT, SIMBAD, Gaia) are skipped by default and in CI.
+# Run them by hand with: pytest -m network
+addopts = "-q -m 'not network'"
+markers = ["network: queries real external services; run by hand with pytest -m network"]
