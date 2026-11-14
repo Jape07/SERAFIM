@@ -1,6 +1,7 @@
 """Command line: `python -m serafim <command>`.
 
 - `python -m serafim mock`: simulated gold in data/gold/ (task D1, data engineering).
+- `python -m serafim bronze [--region X]`: IRSA cutouts in data/bronze/ (task D2).
 - `python -m serafim run [--region X] [--from silver]`: full pipeline (task D8).
 """
 
@@ -23,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     mock = commands.add_parser("mock", help="Write simulated gold to data/gold/ (task D1).")
     mock.add_argument("--out", default="data/gold", help="Gold folder (default: data/gold).")
 
+    bronze_cmd = commands.add_parser(
+        "bronze", help="Download IRSA cutouts to data/bronze/ (task D2)."
+    )
+    bronze_cmd.add_argument("--region", help="Only this region (an id from config/regions.yaml).")
+
     run = commands.add_parser("run", help="Run the full pipeline (task D8).")
     run.add_argument("--region", help="Only this region (an id from config/regions.yaml).")
     run.add_argument(
@@ -42,8 +48,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.command == "mock":
         return mock(Path(args.out))
+    if args.command == "bronze":
+        return bronze(args.region)
     log.error("Command '%s' is not implemented yet (task D8).", args.command)
     return 1
+
+
+def bronze(region_id: str | None) -> int:
+    """Download bronze cutouts. Silver and gold stay task D3 and later."""
+    from serafim.bronze.download import ArchiveError, download
+
+    try:
+        download(region_id)
+    except ArchiveError as error:
+        log.error("%s", error)
+        return 1
+    return 0
 
 
 def mock(gold_dir: Path) -> int:
