@@ -1,6 +1,7 @@
 import { detections, frames, objects, regions } from "./data.js";
 
 const status = document.querySelector("#status");
+const regionSelect = document.querySelector("#region");
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
 const diffBox = document.querySelector("#diff");
@@ -182,6 +183,16 @@ try {
   const found = await regions();
   const region = found.find((item) => item.region_id === params.get("region")) || found[0];
   if (!region) throw new Error("No region");
+  for (const item of found) {
+    const option = document.createElement("option");
+    option.value = item.region_id;
+    option.textContent = item.name;
+    option.selected = item.region_id === region.region_id;
+    regionSelect.append(option);
+  }
+  regionSelect.addEventListener("change", () => {
+    location.href = `viewer.html?region=${encodeURIComponent(regionSelect.value)}`;
+  });
   sequence = await frames(region.region_id);
   const [objectRows, detectionRows] = await Promise.all([
     objects(region.region_id),
