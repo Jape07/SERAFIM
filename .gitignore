@@ -1,0 +1,29 @@
+# Local data: bronze, silver, gold, dataset and catalog cache
+data/
+web/gold/
+*.fits
+*.fits.gz
+
+# Training artifacts (only the final ONNX model in models/ is committed)
+*.pt
+*.ckpt
+*.db
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

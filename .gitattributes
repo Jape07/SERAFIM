@@ -1,0 +1,13 @@
+# Same line endings on Windows, macOS, Linux and GitHub Actions
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files: never touch line endings or try to diff them
+*.parquet binary
+*.fits binary
+*.npz binary
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.onnx binary

@@ -1,0 +1,23 @@
+# Who owns each folder. Owners are asked to review PRs that touch their folder.
+# When everyone has accepted the invite, replace DATA_USER and WEB_USER with
+# their GitHub usernames (with an @ in front) and uncomment those lines.
+
+# AI & validation
+/serafim/validation/   @Jape07
+/serafim/ai/           @Jape07
+/training/             @Jape07
+/models/               @Jape07
+
+# Data engineering
+# /serafim/bronze/     DATA_USER
+# /serafim/silver/     DATA_USER
+# /serafim/gold/       DATA_USER
+# /serafim/cli.py      DATA_USER
+# /config/             DATA_USER
+# /.github/workflows/  DATA_USER
+
+# Web
+# /web/                WEB_USER
+
+# Gold contract: the whole team
+# /serafim/contract.py @Jape07 DATA_USER WEB_USER

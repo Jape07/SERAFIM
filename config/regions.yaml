@@ -1,0 +1,38 @@
+# SERAFIM: the 3 watched regions and every pipeline setting.
+# Everything tunable lives here, not in the code.
+
+settings:
+  cutout_size_deg: 0.5
+  max_frames_per_region: 60        # Plan B: drop to 30 if reprojection is too slow
+  parallel_downloads: 8            # Be nice to IRSA: never more than 8 at once
+  retries: 3
+  # Confirm in task D2 with Irsa.list_collections(servicetype="SIA", filter="spherex").
+  # If an exposure is in both, keep DR1.
+  collections: [spherex_dr1, spherex_qr3]
+  detection:
+    threshold_sigma: 5             # Plan B: 7 if subtractions are too noisy
+    min_area_px: 3
+  validation:
+    match_radius_px: 2             # 2 px ~ 12 arcsec (1 SPHEREx pixel = 6.15 arcsec)
+    min_p_real: 0.5                # Only used if the CNN beats the classic rule (task A7)
+
+regions:
+  - id: pole
+    name: North Ecliptic Pole
+    ra: 270.0
+    dec: 66.56
+    use_deep_collections: true     # Also search the *_deep versions of the collections
+    why: Deep field that SPHEREx observes every orbit; it has the longest time series.
+
+  # Regions 2 and 3 are chosen by AI & validation in task A2 (PR to this file).
+  # - id: asteroid
+  #   name: ...
+  #   ra: ...
+  #   dec: ...
+  #   why: Field near the ecliptic crossed by a bright known asteroid (V < 16).
+  #
+  # - id: variable_star
+  #   name: ...
+  #   ra: ...
+  #   dec: ...
+  #   why: Known variable star that does not saturate the detector; months-long changes.
