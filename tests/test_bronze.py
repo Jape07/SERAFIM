@@ -98,7 +98,7 @@ def test_download_keeps_dr1_and_skips_it_the_second_time(tmp_path):
 def test_unknown_region_is_rejected(tmp_path):
     root = _config_root(tmp_path)
     with pytest.raises(ArchiveError, match="Unknown region"):
-        download("asteroid", root=root, query=lambda *args: [], fetch=lambda job: None)
+        download("not-a-region", root=root, query=lambda *args: [], fetch=lambda job: None)
 
 
 def test_full_pipeline_command_is_still_task_d8():
