@@ -1,46 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Viewer · SERAFIM</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <title>Visor · SERAFIM</title>
+  <script>
+    const hash = location.hash && location.hash !== "#" ? location.hash : "#visor";
+    location.replace("index.html" + location.search + hash);
+  </script>
 </head>
 <body>
-  <header class="bar">
-    <a class="brand" href="index.html">SERAFIM</a>
-    <nav>
-      <a href="index.html">Home</a>
-      <a href="viewer.html" aria-current="page">Viewer</a>
-      <a href="catalog.html">Catalog</a>
-      <a href="about.html">About</a>
-    </nav>
-  </header>
-  <main class="wrap viewer">
-    <p id="status" class="status">Loading frames…</p>
-    <div class="toolbar">
-      <label>Region <select id="region"></select></label>
-      <button id="play" type="button">Play</button>
-      <label>Frame <input id="slider" type="range" min="0" max="0" value="0"></label>
-      <label><input id="diff" type="checkbox"> Difference</label>
-      <label><input id="discarded" type="checkbox"> Show discarded</label>
-    </div>
-    <p id="caption" class="caption"></p>
-    <div class="stage-row">
-      <div class="stage">
-        <img id="frame" alt="SPHEREx frame">
-        <svg id="marks" xmlns="http://www.w3.org/2000/svg"></svg>
-      </div>
-      <aside id="panel" class="panel" hidden>
-        <button id="close" type="button">Close</button>
-        <h2 id="panel-name"></h2>
-        <dl id="panel-body"></dl>
-      </aside>
-    </div>
-  </main>
-  <footer class="bar foot">
-    Data from NASA’s SPHEREx mission, served by IRSA at IPAC (Caltech).
-  </footer>
-  <script type="module" src="js/viewer.js"></script>
+  <p><a href="index.html#visor">Abrir el visor</a></p>
 </body>
 </html>
