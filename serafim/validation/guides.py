@@ -40,6 +40,25 @@ MOON_WIDTH_ARCMIN = 30.0
 PERIOD_DAYS = {"r_dra": 247.2}
 PERIOD_SOURCE = "SIMBAD mesVar, Gaia DR3 long-period variables (2022yCat.1358)"
 
+# Where SPHEREx really shows the target, from the visibility check on real frames
+# (docs/visibility.md, PR #50). The first detector is the one the viewer opens.
+# WISE 0855: S/N 9.6 in D6 and 6.3 in D5 (every season added), not seen in D1-D4.
+# Barnard's Star: its motion measured on the ring matches the catalog to 0.1 px in D5-D6,
+# where its saturated center is smallest.
+SEEN_DETECTORS = {"wise_0855": (6, 5), "barnard": (5, 6)}
+VISIBILITY_SOURCE = "docs/visibility.md (real SPHEREx frames)"
+
+# A background star that a target passes very close to, from Gaia DR3 (epoch 2016.0); found by
+# the visibility check, where it faked a detection of WISE 0855 in detectors 1-4. Its distance
+# to the target in each season is computed from both motions, not typed.
+NEIGHBOURS = {
+    "wise_0855": {
+        "name": "Gaia DR3 5756956644387831296", "g_mag": 16.31,
+        "ra": 133.758183, "dec": -7.241156, "pmra_mas_yr": -6.187835, "pmdec_mas_yr": 1.930855,
+        "parallax_mas": 0.285879, "epoch_jyear": 2016.0,
+    },
+}  # fmt: skip
+
 # Detector edges measured in task D1 (IRSA SIA em_min/em_max, docs/real_fits.md)
 DETECTORS = (
     (1, 0.746, 1.117, "Near-infrared just past red light. Stars like the Sun are bright here."),
@@ -204,7 +223,37 @@ def target_facts(target: dict) -> dict:
         ]
     if target["id"] in PERIOD_DAYS:
         facts["period_days"] = PERIOD_DAYS[target["id"]]
+    if target["id"] in SEEN_DETECTORS:
+        facts["seen_in_detectors"] = list(SEEN_DETECTORS[target["id"]])
+    if target["id"] in NEIGHBOURS:
+        star = NEIGHBOURS[target["id"]]
+        facts["neighbour_star"] = {
+            "name": star["name"],
+            "g_mag": star["g_mag"],
+            "pixels_by_season": neighbour_pixels(target),
+        }
     return facts
+
+
+def neighbour_pixels(target: dict) -> dict[int, float]:
+    """Distance (SPHEREx pixels) between the target and its neighbour star, per season."""
+    import astropy.units as u
+    import pandas as pd
+    from astropy.coordinates import SkyCoord
+    from astropy.time import Time
+
+    from serafim.validation import layers
+
+    star = pd.DataFrame([NEIGHBOURS[target["id"]]])
+    out = {}
+    for season in target["seasons"]:
+        when = Time(season["mean_utc"], scale="utc")
+        here = targets.propagate(target, when)
+        ra, dec = layers.move(star, when)
+        there = SkyCoord(ra[0] * u.deg, dec[0] * u.deg)
+        separation = SkyCoord(here.ra, here.dec).separation(there).to_value(u.arcsec)
+        out[int(season["season"])] = round(float(separation) / targets.PIXEL_SCALE_ARCSEC, 2)
+    return out
 
 
 def saturated_detectors(target: dict) -> list[int]:
@@ -260,10 +309,13 @@ def _barnard(target: dict, facts: dict) -> dict:
             "In the difference image it leaves a dark spot where it was and a bright spot "
             "where it went."
         ),
-        "detectors": sorted(detectors_seen(target)),
+        "detectors": list(SEEN_DETECTORS["barnard"]),
         "mode": "difference",
         "seasons": [1, seasons],
-        "how": f"Any detector. Choose the difference of season {seasons} minus season 1.",
+        "how": (
+            "Detector 5 or 6, where its saturated center is smallest. Choose the difference of "
+            f"season {seasons} minus season 1."
+        ),
         "watch_out": [
             _saturated_text(target),
             "Star charts from the year 2000 put it about "
@@ -302,7 +354,10 @@ def _eps_indi_b(target: dict, facts: dict) -> dict:
 
 def _wise_0855(target: dict, facts: dict) -> dict:
     compass, where = direction(target)
-    seasons = facts["seasons"]
+    best = SEEN_DETECTORS["wise_0855"][0]
+    with_best = [s["season"] for s in target["seasons"] if best in s["detectors"]]
+    pixels = facts["neighbour_star"]["pixels_by_season"]
+    first, last = target["seasons"][0], target["seasons"][-1]
     return {
         "headline": "The coldest brown dwarf known",
         "what_it_is": (
@@ -311,20 +366,24 @@ def _wise_0855(target: dict, facts: dict) -> dict:
             "light: it only shines in the longest infrared colors."
         ),
         "what_to_look_at": (
-            "Choose detector 5 or 6 and the image of all seasons: it should be the faint dot "
-            "at the center. Then try the difference of the last season minus the first: it "
-            f"moved about {facts['shift_pixels_first_to_last_season']:.1f} pixels {compass} "
-            f"({where})."
+            f"Open detector {best} with every season added: the faint dot at the center, "
+            "right where WISE puts it. It moved about "
+            f"{facts['shift_pixels_first_to_last_season']:.1f} pixels {compass} ({where}) over "
+            "the year, a shift too small to follow season by season."
         ),
-        "detectors": [5, 6],
+        "detectors": list(SEEN_DETECTORS["wise_0855"]),
         "mode": "all_seasons",
-        "seasons": [0, 1, seasons],
-        "how": "Detector 5 or 6, image of all seasons first, then the difference.",
+        "seasons": [0, *with_best],
+        "how": (
+            f"Detector {best}, or {SEEN_DETECTORS['wise_0855'][1]} with every season added. "
+            "It does not show in detectors 1 to 4."
+        ),
         "watch_out": [
-            "It is faint for SPHEREx and may not show in a single season. If it is not there, "
-            "that is a real result, not a bug.",
-            "The challenge gives its position from about 2010. It has moved since, so this "
-            "site centers on where it is today.",
+            f"A background star sits next to its path: {pixels[first['season']]:.1f} pixels "
+            f"away in {_month(first['mean_utc'])}, {pixels[last['season']]:.1f} in "
+            f"{_month(last['mean_utc'])}. In detectors 1 to 4, the dot at the center is that "
+            "star, not WISE 0855.",
+            "The challenge's position is from about 2010; this site centers on where it is today.",
         ],
     }
 
