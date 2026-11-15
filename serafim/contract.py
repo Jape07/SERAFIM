@@ -22,6 +22,9 @@ A single exposure always has one detector (1 to 6) and one season (1 or more). S
 count from 1 in time order. If a season has no frames for a detector, that row does not
 exist (no sum, no difference, no PNG): the site skips it. Never invent a cell.
 
+The id of a frame is always frame_id(target_id, obs_id), `<target_id>_<obs_id>`: silver,
+AI's spectra and the gold frames build it the same way, so spectra.frame_id finds its frame.
+
 PNG names (relative to gold/; the site builds the URL from these pieces, so they never
 change without telling web). See sum_png(), difference_png() and color_png():
     png/<target>/sum_d<detector>_s<season>.png
@@ -204,6 +207,16 @@ KEYS: dict[str, tuple[str, ...]] = {
 # is the git SHA, collections the SIA collections that were searched, n_frames the rows of
 # frames.parquet.
 META_KEYS = ("run_date_utc", "commit", "collections", "last_frame_date_utc", "n_frames")
+
+
+# --- Ids (every layer builds them the same way) ------------------------------
+def frame_id(target_id: str, obs_id: str) -> str:
+    """The frame_id of one exposure: `<target_id>_<obs_id>`.
+
+    IRSA's obs_id has only letters, digits and underscores, and the 1975 obs_id of the 5
+    targets are all different, so this id is unique and safe in a file name.
+    """
+    return f"{target_id}_{obs_id}"
 
 
 # --- PNG names (the site builds URLs from these pieces) ----------------------
@@ -399,6 +412,9 @@ def _check_values(tables: dict[str, pd.DataFrame], errors: list[str]) -> None:
         check(name, "wavelength_um outside the band of its detector", low.notna() & ~inside)
         check(name, "bandwidth_um must be > 0", positive(t.bandwidth_um))
         flags(name)
+        expected = [frame_id(r.target_id, r.obs_id) for r in t.itertuples()]
+        check(name, "frame_id must be <target_id>_<obs_id>",
+              t.frame_id != pd.Series(expected, index=t.index, dtype="object"))
 
     if "sums.parquet" in tables:
         t = tables["sums.parquet"]

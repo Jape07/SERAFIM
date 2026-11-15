@@ -24,7 +24,6 @@ meta.json changes: it records the run date).
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,7 +35,8 @@ from matplotlib import image as mpimg
 
 from serafim import contract
 from serafim.gold.export import build_meta, write_gold
-from serafim.validation.targets import PIXEL_SCALE_ARCSEC
+from serafim.silver.differences import difference_pairs
+from serafim.silver.grid import target_wcs, wcs_to_json
 
 log = logging.getLogger(__name__)
 
@@ -85,25 +85,6 @@ class MockGold:
 
 
 # --- Pure functions: no disk, no network ------------------------------------
-def target_wcs(ra: float, dec: float, size_deg: float) -> WCS:
-    """TAN grid centered on the target, one SPHEREx pixel per pixel, north up."""
-    n = int(round(size_deg * 3600 / PIXEL_SCALE_ARCSEC))
-    wcs = WCS(naxis=2)
-    wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    wcs.wcs.crval = [ra, dec]
-    wcs.wcs.crpix = [(n + 1) / 2, (n + 1) / 2]
-    wcs.wcs.cdelt = [-PIXEL_SCALE_ARCSEC / 3600, PIXEL_SCALE_ARCSEC / 3600]
-    wcs.pixel_shape = (n, n)
-    return wcs
-
-
-def wcs_to_json(wcs: WCS) -> str:
-    header = wcs.to_header()
-    values = {key: header[key] for key in header}
-    values["NAXIS1"], values["NAXIS2"] = wcs.pixel_shape
-    return json.dumps(values, sort_keys=True)
-
-
 def png_to_sky(wcs: WCS, x_px, y_px) -> tuple[np.ndarray, np.ndarray]:
     """PNG pixel (origin top-left) -> (ra, dec) in degrees."""
     n_rows = wcs.pixel_shape[1]
@@ -195,11 +176,12 @@ def _frames(target_id: str, rng: np.random.Generator) -> pd.DataFrame:
                     days=9 * k, minutes=98 * detector
                 )
                 wavelength = round(float(low + (high - low) * rng.uniform(0.15, 0.85)), 4)
+                obs_id = f"MOCK_{date:%Y%m%d}_{len(rows):03d}"
                 rows.append(
                     {
-                        "frame_id": f"{target_id}_s{season}_d{detector}_f{k}",
+                        "frame_id": contract.frame_id(target_id, obs_id),
                         "target_id": target_id,
-                        "obs_id": f"MOCK_{date:%Y%m%d}_{len(rows):03d}",
+                        "obs_id": obs_id,
                         "collection": collection,
                         "date_utc": date,
                         "season": season,
@@ -249,24 +231,18 @@ def _sums(target_id: str, frames: pd.DataFrame) -> pd.DataFrame:
 
 
 def _differences(target_id: str, sums: pd.DataFrame) -> pd.DataFrame:
-    """Season b minus a: consecutive seasons and last minus first, where both sums exist."""
-    last = len(SEASONS)
-    pairs = [(s, s + 1) for s in range(1, last)] + [(1, last)]
-    cells = set(zip(sums.detector, sums.season, strict=True))
-    rows = []
-    for detector in range(1, 7):
-        for a, b in pairs:
-            if (detector, a) in cells and (detector, b) in cells:
-                rows.append(
-                    {
-                        "difference_id": f"{target_id}_d{detector}_s{a}-s{b}",
-                        "target_id": target_id,
-                        "detector": detector,
-                        "season_a": a,
-                        "season_b": b,
-                        "png": contract.difference_png(target_id, detector, a, b),
-                    }
-                )
+    """Season b minus a, with the same rule as the real pipeline (silver/differences.py)."""
+    rows = [
+        {
+            "difference_id": f"{target_id}_d{detector}_s{a}-s{b}",
+            "target_id": target_id,
+            "detector": detector,
+            "season_a": a,
+            "season_b": b,
+            "png": contract.difference_png(target_id, detector, a, b),
+        }
+        for detector, a, b in difference_pairs(zip(sums.detector, sums.season, strict=True))
+    ]
     return pd.DataFrame(rows)
 
 
