@@ -77,6 +77,9 @@ MOTION_MAX_ERROR = 0.1
 # What the real gold paints as saturated (python -m serafim.validation.verification, task A6):
 # the saturation sentence follows the site's images when this file exists, else task A1's check
 VERIFICATION_PATH = targets.ROOT / "docs" / "verification.json"
+# Catalog markers checked on the real images (python -m serafim.validation.markers, task A8)
+MARKERS_PATH = targets.ROOT / "docs" / "markers.json"
+MAG_BANDS = {"gaia": "G", "catwise": "W2", "simbad": "V", "skybot": "V"}
 CHANGE_THRESHOLD = 0.3
 MAX_RATIO_ERROR = 0.3
 MIN_FRAMES = 3  # a season ratio from fewer frames is not told
@@ -124,10 +127,10 @@ MODES = (
 
 LAYERS = (
     ("gaia", "Gaia", "Stars measured by ESA's Gaia space telescope, moved to the date of "
-     "each season."),
+     "each season. At first only the stars bright enough to see in these images are marked."),
     ("catwise", "CatWISE", "Infrared sources seen by NASA's WISE telescope, moved by their "
-     "measured motion. Entries along the target's own path are hidden: there the catalog is "
-     "unreliable."),
+     "measured motion. At first only the brightest are marked. Entries along the target's own "
+     "path or in the glare of a very bright star are hidden: there the catalog is unreliable."),
     ("simbad", "SIMBAD", "Named objects from the SIMBAD database, including the target itself "
      "at each season."),
     ("skybot", "Asteroids", "Known asteroids that crossed the field during a visit, only those "
@@ -203,7 +206,23 @@ def build(document: dict) -> dict:
             for number, low, high, text in DETECTORS
         ],
         "modes": [{"id": key, "name": name, "text": text} for key, name, text in MODES],
-        "layers": [{"id": key, "name": name, "text": text} for key, name, text in LAYERS],
+        "layers": [
+            {
+                "id": key,
+                "name": name,
+                "text": text,
+                "band": MAG_BANDS[key],
+                "default_max_mag": _fallback_cut(key),
+            }
+            for key, name, text in LAYERS
+        ],  # fmt: skip
+        "markers_note": (
+            "Draw only markers inside the image. Each target's `markers.default_max_mag` is the "
+            "first cut of each layer; `markers.visible_max_mag` (per detector) is how faint "
+            "SPHEREx still shows them. `markers.projection_check`: (ra, dec) -> png_x, png_y "
+            "from astropy, to test the viewer's projection of wcs_json. Pixel centers are whole "
+            "numbers (0 = center of the first pixel) and png_y counts from the top (north up)."
+        ),
         "flags": [
             {
                 "bit": bit,
@@ -240,6 +259,7 @@ def guide(target: dict, settings: dict | None = None) -> dict:
         },
         "watch_out": texts["watch_out"],
         "facts": facts,
+        **({"markers": MARKERS[target["id"]]} if target["id"] in MARKERS else {}),
     }
 
 
@@ -437,6 +457,29 @@ def _wise_0855(target: dict, facts: dict) -> dict:
             "The challenge's position is from about 2010; this site centers on where it is today.",
         ],
     }
+
+
+def _markers() -> dict:
+    """Per target: default and visible magnitude cuts of the layers, and reference positions
+    for the viewer's projection (docs/markers.json, task A8)."""
+    if not MARKERS_PATH.exists():
+        return {}
+    data = json.loads(MARKERS_PATH.read_text(encoding="utf-8"))
+    keep = ("default_max_mag", "visible_max_mag", "projection_check")
+    return {
+        target_id: {k: found[k] for k in keep if k in found} for target_id, found in data.items()
+    }
+
+
+def _fallback_cut(layer: str) -> float | None:
+    """The default cut of a layer for a target without its own (one added by coordinates): the
+    brightest of the five targets' cuts. None: no cut (SIMBAD, asteroids)."""
+    cuts = [m["default_max_mag"][layer] for m in MARKERS.values()
+            if layer in m.get("default_max_mag", {})]  # fmt: skip
+    return min(cuts) if cuts else None
+
+
+MARKERS = _markers()
 
 
 def _light_curves() -> dict:

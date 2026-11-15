@@ -19,6 +19,12 @@ writes them in task D8 with the frames of that run:
   at 1.1 instead of 4.7 arcsec/yr) and leaves artifacts behind a saturated star
   (about 40 false "movers" along Barnard's path). The target itself is in the
   simbad layer, with its exact motion.
+- catwise, too: the halo of a star that saturates WISE (W2 < 7) leaves false entries
+  up to minutes of arc away that CatWISE's artifact flags miss (task A8 found 9
+  around Barnard's Star, W2 = 3.7, 67 to 126 arcsec away, where SPHEREx shows
+  nothing). An entry inside halo_radius() of such a star (the target along its
+  2010-2019 path, a CatWISE entry or a Gaia star with G < 8) is kept only if a Gaia
+  star within 3 arcsec confirms it.
 - skybot: one query per visit (frames less than 2 h apart) at the mean time of the
   visit, because asteroids cross the field within a season. Only asteroids with
   V < 20; skipped for targets more than 40 degrees from the ecliptic, where there
@@ -61,6 +67,11 @@ CATWISE_TARGET_RADIUS_ARCSEC = 30.0
 # CatWISE2020 combines WISE and NEOWISE images from 2010 to 2018: a target that moves
 # fast leaves a trail of bad entries along its path over those years (Barnard: 83 arcsec).
 CATWISE_YEARS = (2010.0, 2019.0)
+HALO_MAX_W2 = 7.0  # brighter stars saturate WISE and leave a halo of false CatWISE entries
+HALO_GAIA_MAX_G = 8.0  # Gaia stars this bright count too, with W2 taken as G - 2
+HALO_ARCSEC_AT_W2_4 = 150.0
+HALO_MAX_ARCSEC = 300.0
+CONFIRM_ARCSEC = 3.0
 VISIT_GAP_HOURS = 2.0
 SKYBOT_MAX_ECLIPTIC_LAT_DEG = 40.0
 # V: fainter asteroids are below what SPHEREx shows (most SkyBoT answers are V ~ 22)
@@ -252,7 +263,13 @@ def _sources(name: str, target: dict, center: SkyCoord, radius: Angle) -> pd.Dat
     if name == "simbad":
         return catalogs.simbad(center, radius)
     if name == "catwise":
-        return _away_from_target(catalogs.catwise(center, radius), target)
+        found = _away_from_target(catalogs.catwise(center, radius), target)
+        try:
+            gaia = catalogs.gaia(center, radius, max_mag=GAIA_MAX_MAG)
+        except catalogs.CatalogUnavailable as error:  # no Gaia to confirm: halos are emptied
+            log.warning("%s: no Gaia to confirm CatWISE in halos: %s", target["id"], error)
+            gaia = catalogs._empty()
+        return _out_of_halos(found, gaia, target)
     raise ValueError(f"unknown catalog {name}")
 
 
@@ -269,6 +286,48 @@ def _away_from_target(sources: pd.DataFrame, target: dict) -> pd.DataFrame:
     log.info("%s: %d CatWISE entries on the target's path left out", target["id"],
              int((~far).sum()))  # fmt: skip
     return sources[far].reset_index(drop=True)
+
+
+def halo_radius(w2: np.ndarray) -> np.ndarray:
+    """Arcsec around a star that saturates WISE where CatWISE has false entries."""
+    w2 = np.asarray(w2, float)
+    return np.minimum(HALO_ARCSEC_AT_W2_4 * 10 ** (-0.2 * (w2 - 4.0)), HALO_MAX_ARCSEC)
+
+
+def _out_of_halos(sources: pd.DataFrame, gaia: pd.DataFrame, target: dict) -> pd.DataFrame:
+    """CatWISE entries outside the halo of every star that saturates WISE, unless Gaia
+    confirms a star there."""
+    if sources.empty:
+        return sources
+    spots, w2 = [], []
+    target_w2 = (target.get("mag") or {}).get("W2")
+    if target_w2 is not None and target_w2 < HALO_MAX_W2 and "ra" in target:
+        years = np.arange(CATWISE_YEARS[0], CATWISE_YEARS[1] + 0.01, 0.5)
+        path = _target_at(target, Time(years, format="jyear"))
+        spots += list(zip(path.ra.deg, path.dec.deg, strict=True))
+        w2 += [target_w2] * len(path)
+    bright = sources[sources["mag"] < HALO_MAX_W2]
+    spots += list(zip(bright["ra"], bright["dec"], strict=True))
+    w2 += list(bright["mag"])
+    if len(gaia):
+        stars = gaia[gaia["mag"] < HALO_GAIA_MAX_G]
+        spots += list(zip(stars["ra"], stars["dec"], strict=True))
+        w2 += list(stars["mag"] - 2.0)
+    if not spots:
+        return sources
+    positions = SkyCoord(sources["ra"].to_numpy() * u.deg, sources["dec"].to_numpy() * u.deg)
+    centers = SkyCoord(*np.array(spots).T, unit="deg")
+    distance = positions[:, None].separation(centers[None, :]).arcsec
+    # a bright star is not inside its own halo
+    inside = ((distance < halo_radius(np.array(w2))[None, :]) & (distance > 1.0)).any(axis=1)
+    confirmed = np.zeros(len(sources), bool)
+    if len(gaia):
+        stars = SkyCoord(gaia["ra"].to_numpy() * u.deg, gaia["dec"].to_numpy() * u.deg)
+        confirmed = positions.match_to_catalog_sky(stars)[1].arcsec < CONFIRM_ARCSEC
+    keep = ~inside | confirmed
+    log.info("%s: %d CatWISE entries in the halo of a bright star left out", target["id"],
+             int((~keep).sum()))  # fmt: skip
+    return sources[keep].reset_index(drop=True)
 
 
 def _target_at(target: dict, when: Time) -> SkyCoord:

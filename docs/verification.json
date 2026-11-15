@@ -59,7 +59,7 @@
       {
         "check": "catalogs",
         "status": "pass",
-        "detail": "Rows: gaia 6440, catwise 3548, simbad 300, skybot 4; a marker sits on the target in every season."
+        "detail": "Rows: gaia 6440, catwise 3384, simbad 300, skybot 4; a marker sits on the target in every season."
       }
     ]
   },
@@ -203,7 +203,7 @@
       {
         "check": "catalogs",
         "status": "pass",
-        "detail": "Rows: gaia 4136, catwise 2852, simbad 176, skybot 49; a marker sits on the target in every season."
+        "detail": "Rows: gaia 4136, catwise 2848, simbad 176, skybot 49; a marker sits on the target in every season."
       }
     ]
   },
