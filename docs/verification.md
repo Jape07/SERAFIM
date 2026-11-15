@@ -92,7 +92,7 @@ saturated, so the target is seen and an S/N means nothing; — : no frames there
 ## R Draconis (`r_dra`)
 
 - ✅ **gold**: 218 frames in 4 seasons (1259 exist; at most 12 per detector and season are used), 20 sums, 20 differences. SPHEREx did not observe it in (detector, season) (1, 3), (2, 3), (4, 3), (5, 3): no image there.
-- ✅ **seen**: Detected in detectors 1, 2, 3, 4, 5, 6; the guide recommends detectors 1, 2, 3, 4, 5, 6.
+- ✅ **seen**: Detected in detectors 1, 2, 3, 4, 5, 6; the guide recommends detector 6.
 - ✅ **saturation**: Gold paints the center saturated in every season of detectors 1, 2, 3, 4, 5, 6; the guide says always 1, 2, 3, 4, 5, 6, sometimes none. Frame flags at the target: BLOOM 217, OVERFLOW 217, SUR_ERROR 217.
 - ✅ **brightness**: SPHEREx alone finds 244 days (false alarm 0.005); the catalog says 247.
 - ✅ **catalogs**: Rows: gaia 790, catwise 290, simbad 70, skybot 0; a marker sits on the target in every season.
