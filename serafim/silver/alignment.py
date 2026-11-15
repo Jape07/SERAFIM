@@ -39,11 +39,8 @@ DETECTION_SIGMA = 8.0
 DOC_PATH = Path("docs") / "alignment.md"
 
 
-def measure_offsets(image, mask, wcs, ra, dec, target_xy=None) -> dict:
-    """Median (found - catalog) position of the matched stars, in pixels, and how many matched.
-
-    `ra`, `dec` (degrees) are the catalog positions already moved to the date of the image.
-    Stars within TARGET_EXCLUSION_PX of `target_xy` are left out (the target moves).
+def detect_stars(image, mask) -> tuple[np.ndarray, np.ndarray]:
+    """Windowed centroids (x, y) of the stars in an image, in pixels.
 
     The detection threshold uses the noise measured in the background of the image, not the
     propagated variance: in a crowded field (Barnard in D1-D3) the faint stars make the real
@@ -57,24 +54,105 @@ def measure_offsets(image, mask, wcs, ra, dec, target_xy=None) -> dict:
     error = np.ascontiguousarray(background.rms(), dtype=np.float32)
     found = sep.extract(subtracted, DETECTION_SIGMA, err=error, mask=mask, minarea=4)
     if len(found) == 0:
-        return {"n_stars": 0, "dx_px": np.nan, "dy_px": np.nan}
+        return np.array([]), np.array([])
     x, y, _ = sep.winpos(subtracted, found["x"], found["y"], np.full(len(found), 1.0), mask=mask)
+    return np.asarray(x), np.asarray(y)
 
-    cat_x, cat_y = wcs.world_to_pixel(SkyCoord(np.asarray(ra) * u.deg, np.asarray(dec) * u.deg))
+
+def match_offsets(x, y, ref_x, ref_y, target_xy=None) -> dict:
+    """Median (x, y) - (ref_x, ref_y) of the nearest pairs within MATCH_PX, and how many."""
     dx, dy = [], []
-    for px, py in zip(np.atleast_1d(cat_x), np.atleast_1d(cat_y), strict=True):
-        if target_xy is not None and np.hypot(px - target_xy[0], py - target_xy[1]) < (
-            TARGET_EXCLUSION_PX
-        ):
-            continue
-        distance = np.hypot(x - px, y - py)
-        k = int(np.argmin(distance))
-        if distance[k] < MATCH_PX:
-            dx.append(x[k] - px)
-            dy.append(y[k] - py)
+    if len(x):
+        for px, py in zip(np.atleast_1d(ref_x), np.atleast_1d(ref_y), strict=True):
+            if target_xy is not None and np.hypot(px - target_xy[0], py - target_xy[1]) < (
+                TARGET_EXCLUSION_PX
+            ):
+                continue
+            distance = np.hypot(x - px, y - py)
+            k = int(np.argmin(distance))
+            if distance[k] < MATCH_PX:
+                dx.append(x[k] - px)
+                dy.append(y[k] - py)
     if not dx:
         return {"n_stars": 0, "dx_px": np.nan, "dy_px": np.nan}
     return {"n_stars": len(dx), "dx_px": float(np.median(dx)), "dy_px": float(np.median(dy))}
+
+
+def measure_offsets(image, mask, wcs, ra, dec, target_xy=None) -> dict:
+    """Median (found - catalog) position of the matched stars, in pixels, and how many matched.
+
+    `ra`, `dec` (degrees) are the catalog positions already moved to the date of the image.
+    Stars within TARGET_EXCLUSION_PX of `target_xy` are left out (the target moves).
+    """
+    x, y = detect_stars(image, mask)
+    cat_x, cat_y = wcs.world_to_pixel(SkyCoord(np.asarray(ra) * u.deg, np.asarray(dec) * u.deg))
+    return match_offsets(x, y, cat_x, cat_y, target_xy)
+
+
+def measure_between_seasons(target_id: str, *, root: Path | None = None) -> pd.DataFrame:
+    """Offset of season b against season a for every difference, on the stars of the sums.
+
+    What a difference needs is that both seasons sit on the same grid; this measures exactly
+    that, without any catalog. Used when Gaia does not answer. Columns: detector, season
+    ("a-b"), n_stars, dx_px, dy_px (season b minus season a).
+    """
+    from serafim.silver.differences import difference_pairs
+
+    root = root or ROOT
+    config = load_config(root / "config" / "targets.yaml")
+    target = next(t for t in config["targets"] if t["id"] == target_id)
+    sums = pq.read_table(sums_table_path(root)).to_pandas()
+    mine = sums[sums.target_id == target_id]
+    rows = []
+    for detector, a, b in difference_pairs(zip(mine.detector, mine.season, strict=True)):
+        first = load_sum(target_id, detector, a, root)
+        second = load_sum(target_id, detector, b, root)
+        target_xy = first["wcs"].world_to_pixel(target_position(target, first["mean_mjd"]))
+        ref_x, ref_y = detect_stars(first["image"], first["mask"])
+        x, y = detect_stars(second["image"], second["mask"])
+        found = match_offsets(x, y, ref_x, ref_y, target_xy)
+        rows.append({"detector": detector, "season": f"{a}-{b}", **found})
+    return pd.DataFrame(rows, columns=["detector", "season", "n_stars", "dx_px", "dy_px"])
+
+
+# Mirrors of VizieR that serve Gaia DR3 (I/355/gaiadr3), tried in order. Used only when ESA's
+# Gaia archive does not answer; the main CDS site was offline in November 2026.
+VIZIER_SERVERS = ("vizier.cfa.harvard.edu", "vizier.cds.unistra.fr", "vizier.iucaa.in")
+
+
+def gaia_from_vizier(center: SkyCoord, radius, max_mag: float) -> pd.DataFrame:
+    """Gaia DR3 sources from a VizieR mirror, in the columns of validation.catalogs.
+
+    Positions are ICRS at epoch 2016.0, as in ESA's archive, so layers.move() works the same.
+    """
+    from astroquery.vizier import Vizier
+
+    from serafim.validation import catalogs
+
+    columns = ["Source", "RA_ICRS", "DE_ICRS", "pmRA", "pmDE", "Plx", "Gmag"]
+    last = None
+    for server in VIZIER_SERVERS:
+        vizier = Vizier(columns=columns, row_limit=-1, column_filters={"Gmag": f"<{max_mag}"},
+                        vizier_server=server, timeout=60)
+        try:
+            found = vizier.query_region(center, radius=radius, catalog="I/355/gaiadr3")
+        except Exception as error:  # any failure: try the next mirror
+            last = error
+            continue
+        if not len(found) or not len(found[0]):  # an empty answer once came back: next mirror
+            last = f"{server} answered no rows"
+            continue
+        table = found[0].to_pandas()
+        rows = pd.DataFrame({
+            "catalog": "gaia", "name": "Gaia DR3 " + table["Source"].astype(str),
+            "ra": table["RA_ICRS"].astype(float), "dec": table["DE_ICRS"].astype(float),
+            "type": None, "is_variable": False, "mag": table["Gmag"].astype(float), "url": None,
+            "pmra_mas_yr": table["pmRA"].astype(float), "pmdec_mas_yr": table["pmDE"].astype(float),
+            "parallax_mas": table["Plx"].astype(float), "epoch_jyear": catalogs.GAIA_EPOCH_JYEAR,
+        })
+        log.info("Gaia DR3 from %s: %d sources", server, len(rows))
+        return rows[[c for c in catalogs.COLUMNS if c in rows.columns]]
+    raise catalogs.CatalogUnavailable(f"Gaia DR3 at VizieR did not answer: {last}")
 
 
 def measure_alignment(target_id: str, *, root: Path | None = None, sources=None) -> pd.DataFrame:
@@ -90,7 +168,12 @@ def measure_alignment(target_id: str, *, root: Path | None = None, sources=None)
 
         center = SkyCoord(float(target["ra_now"]) * u.deg, float(target["dec_now"]) * u.deg)
         size = float(target.get("cutout_size_deg") or config["settings"]["cutout_size_deg"])
-        sources = catalogs.gaia(center, catalogs._region_radius(size), max_mag=layers.GAIA_MAX_MAG)
+        try:
+            sources = catalogs.gaia(center, catalogs._region_radius(size),
+                                    max_mag=layers.GAIA_MAX_MAG)
+        except catalogs.CatalogUnavailable as error:
+            log.warning("target=%s: %s; trying Gaia DR3 at VizieR", target_id, error)
+            sources = gaia_from_vizier(center, catalogs._region_radius(size), GAIA_MAG[1])
     sources = sources[sources["mag"].between(*GAIA_MAG)].reset_index(drop=True)
 
     from serafim.validation.layers import move
@@ -109,14 +192,23 @@ def measure_alignment(target_id: str, *, root: Path | None = None, sources=None)
     return pd.DataFrame(rows, columns=["detector", "season", "n_stars", "dx_px", "dy_px"])
 
 
-def section(target_id: str, table: pd.DataFrame) -> str:
+BETWEEN_SEASONS_NOTE = (
+    "Gaia did not answer (ESA and the VizieR mirrors), so this is measured without a catalog: "
+    "for every difference, the stars of the season b sum against the same stars in the season "
+    "a sum (Season = a-b, offsets of b minus a). That is what a difference needs; the "
+    "comparison with Gaia is still to do."
+)
+
+
+def section(target_id: str, table: pd.DataFrame, note: str | None = None) -> str:
     """The markdown section of one target in docs/alignment.md."""
-    offsets = np.abs(table[["dx_px", "dy_px"]].to_numpy())
+    offsets = np.abs(table[["dx_px", "dy_px"]].to_numpy(dtype=float))
     worst = float(np.nanmax(offsets)) if len(table) else np.nan
     verdict = "meets" if worst < GOAL_PX else "DOES NOT meet"
     lines = [
         f"## {target_id}",
         "",
+        *([note, ""] if note else []),
         f"Largest median offset: **{worst:.3f} px**, which {verdict} the goal of {GOAL_PX} px.",
         "",
         "| Detector | Season | Stars | dx (px) | dy (px) |",
@@ -143,13 +235,14 @@ under {GOAL_PX} px: above that, differences between seasons fake dipoles on fixe
 """
 
 
-def write_section(target_id: str, table: pd.DataFrame, path: Path) -> None:
+def write_section(target_id: str, table: pd.DataFrame, path: Path,
+                  note: str | None = None) -> None:
     """Replace (or add) the section of this target in docs/alignment.md; keep the others."""
     sections = {}
     if path.is_file():
         for block in re.split(r"(?m)^(?=## )", path.read_text(encoding="utf-8"))[1:]:
             sections[block.split("\n", 1)[0][3:].strip()] = block.rstrip() + "\n"
-    sections[target_id] = section(target_id, table)
+    sections[target_id] = section(target_id, table, note)
     body = "\n".join(sections[name] for name in sorted(sections))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(HEADER + "\n" + body, encoding="utf-8")
@@ -161,10 +254,17 @@ def run(target_id: str | None = None, *, root: Path | None = None) -> float:
     sums = pq.read_table(sums_table_path(root)).to_pandas()
     wanted = [target_id] if target_id else sorted(set(sums.target_id))
     worst = 0.0
+    from serafim.validation.catalogs import CatalogUnavailable
+
     for name in wanted:
-        table = measure_alignment(name, root=root)
-        write_section(name, table, root / DOC_PATH)
-        target_worst = float(np.nanmax(np.abs(table[["dx_px", "dy_px"]].to_numpy())))
+        note = None
+        try:
+            table = measure_alignment(name, root=root)
+        except CatalogUnavailable as error:
+            log.warning("target=%s: %s; measuring between seasons instead", name, error)
+            table, note = measure_between_seasons(name, root=root), BETWEEN_SEASONS_NOTE
+        write_section(name, table, root / DOC_PATH, note)
+        target_worst = float(np.nanmax(np.abs(table[["dx_px", "dy_px"]].to_numpy(dtype=float))))
         worst = max(worst, target_worst)
         log.info("target=%s: largest median offset %.3f px over %d sums", name, target_worst,
                  len(table))

@@ -14,7 +14,7 @@ from serafim.pipeline import publish_targets, run
 
 def test_only_checked_targets_are_published():
     config = load_config()
-    assert publish_targets(config) == ["barnard"]
+    assert publish_targets(config) == ["barnard", "wise_0855"]
     assert set(config["settings"]["publish"]) <= {t["id"] for t in config["targets"]}
 
 
@@ -49,23 +49,27 @@ def calls(monkeypatch):
 
 def test_from_bronze_runs_every_step_and_gold_has_every_published_target(calls):
     run()
-    assert calls == [("bronze", "barnard"), ("frames", "barnard"), ("sums", "barnard"),
-                     ("differences", "barnard"), ("gold", ["barnard"])]
+    published = publish_targets(load_config())
+    steps_per_target = [(step, name) for name in published
+                        for step in ("bronze", "frames", "sums", "differences")]
+    assert calls == [*steps_per_target, ("gold", published)]
 
 
 def test_from_silver_does_not_download(calls):
     run(start="silver")
-    assert [step for step, _ in calls] == ["frames", "sums", "differences", "gold"]
+    steps = [step for step, _ in calls]
+    assert "bronze" not in steps and steps[-1] == "gold"
+    assert steps.count("frames") == len(publish_targets(load_config()))
 
 
 def test_from_gold_only_rebuilds_gold(calls):
     run(start="gold")
-    assert calls == [("gold", ["barnard"])]
+    assert calls == [("gold", publish_targets(load_config()))]
 
 
 def test_a_target_that_is_not_published_is_refused(calls):
     with pytest.raises(ValueError, match="settings.publish"):
-        run("wise_0855")
+        run("r_dra")
     assert calls == []
 
 
