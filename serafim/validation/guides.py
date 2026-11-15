@@ -51,6 +51,10 @@ SEEN_DETECTORS = {"wise_0855": (6, 5), "barnard": (5, 6)}
 # core (python -m serafim.validation.light_curves -> docs/light_curves.json). Barnard's Star,
 # not variable, scatters by up to ~30 % in one detector, so only larger changes are told.
 LIGHT_CURVES_PATH = targets.ROOT / "docs" / "light_curves.json"
+# Motion measured on the SPHEREx sums (python -m serafim.validation.trajectory, task A5); told
+# in the text only when its error is under MOTION_MAX_ERROR of the value
+TRAJECTORY_PATH = targets.ROOT / "docs" / "trajectory.json"
+MOTION_MAX_ERROR = 0.1
 CHANGE_THRESHOLD = 0.3
 MAX_RATIO_ERROR = 0.3
 MIN_FRAMES = 3  # a season ratio from fewer frames is not told
@@ -230,6 +234,10 @@ def target_facts(target: dict) -> dict:
         facts["shift_pixels_first_to_last_season"] = target["motion"][
             "shift_px_first_to_last_season"
         ]
+        motion = measured_motion(target["id"])
+        if motion:
+            facts["measured_motion_arcsec_per_year"] = motion["measured_total_arcsec_yr"]
+            facts["measured_motion_error_arcsec_per_year"] = motion["error_total_arcsec_yr"]
     if target["id"] in PERIOD_DAYS:
         facts["period_days"] = PERIOD_DAYS[target["id"]]
     if target["id"] in SEEN_DETECTORS:
@@ -331,14 +339,13 @@ def _barnard(target: dict, facts: dict) -> dict:
         "mode": "difference",
         "seasons": [1, seasons],
         "how": (
-            "Detector 5 or 6, where its saturated center is smallest. Choose the difference of "
-            f"season {seasons} minus season 1."
+            "Detector 5 or 6, where its saturated center is smallest; difference of season "
+            f"{seasons} minus season 1.{_motion_text(target['id'])}"
         ),
         "watch_out": [
             _saturated_text(target),
-            "Star charts from the year 2000 put it about "
-            f"{_fraction(since_2000)} of the Moon's width away from where it is today. This "
-            "site uses today's position.",
+            f"Charts from 2000 put it {_fraction(since_2000)} of the Moon's width from where it "
+            "is today.",
         ],
     }
 
@@ -365,7 +372,8 @@ def _eps_indi_b(target: dict, facts: dict) -> dict:
             "Epsilon Indi A, a much brighter star, is in the same field. The brown dwarfs are "
             "the faint dot at the center.",
             f"They move too: about {facts['shift_pixels_first_to_last_season']:.1f} pixels "
-            f"{compass} ({where}) between the first and the last season.",
+            f"{compass} ({where}) between the first and the last season."
+            f"{_motion_text(target['id'])}",
         ],
     }
 
@@ -410,6 +418,31 @@ def _light_curves() -> dict:
     if not LIGHT_CURVES_PATH.exists():
         return {}
     return json.loads(LIGHT_CURVES_PATH.read_text(encoding="utf-8"))
+
+
+def measured_motion(target_id: str) -> dict | None:
+    """The motion measured on the SPHEREx sums (docs/trajectory.json, task A5), if any."""
+    if not TRAJECTORY_PATH.exists():
+        return None
+    data = json.loads(TRAJECTORY_PATH.read_text(encoding="utf-8"))
+    return (data.get(target_id) or {}).get("motion")
+
+
+def precise(motion: dict | None) -> bool:
+    """A measured motion good enough to be told: its error is under MOTION_MAX_ERROR of it."""
+    if not motion:
+        return False
+    return motion["error_total_arcsec_yr"] <= MOTION_MAX_ERROR * motion["measured_total_arcsec_yr"]
+
+
+def _motion_text(target_id: str) -> str:
+    """' SPHEREx measured X pixels a year; catalogs say Y.' when the measurement is precise."""
+    motion = measured_motion(target_id)
+    if not precise(motion):
+        return ""
+    measured = motion["measured_total_arcsec_yr"] / targets.PIXEL_SCALE_ARCSEC
+    catalog = motion["catalog_total_arcsec_yr"] / targets.PIXEL_SCALE_ARCSEC
+    return f" SPHEREx measured {measured:.2f} pixels a year; catalogs say {catalog:.2f}."
 
 
 def light_curve(target_id: str) -> list[dict] | None:

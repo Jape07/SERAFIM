@@ -1,0 +1,128 @@
+{
+  "barnard": {
+    "motion": {
+      "measured_mas_yr": [
+        -782.9,
+        10401.9
+      ],
+      "error_mas_yr": [
+        374.2,
+        374.2
+      ],
+      "measured_total_arcsec_yr": 10.431,
+      "catalog_total_arcsec_yr": 10.4,
+      "error_total_arcsec_yr": 0.374,
+      "seasons": [
+        1,
+        2,
+        3
+      ]
+    },
+    "seasons": [
+      {
+        "season": 1,
+        "measured": true,
+        "offset_arcsec": 0.543,
+        "error_arcsec": 0.261
+      },
+      {
+        "season": 2,
+        "measured": true,
+        "offset_arcsec": 0.912,
+        "error_arcsec": 0.258
+      },
+      {
+        "season": 3,
+        "measured": true,
+        "offset_arcsec": 0.78,
+        "error_arcsec": 0.26
+      }
+    ]
+  },
+  "eps_indi_b": {
+    "motion": {
+      "measured_mas_yr": [
+        3710.7,
+        -2655.3
+      ],
+      "error_mas_yr": [
+        276.8,
+        276.8
+      ],
+      "measured_total_arcsec_yr": 4.563,
+      "catalog_total_arcsec_yr": 4.625,
+      "error_total_arcsec_yr": 0.277,
+      "seasons": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "seasons": [
+      {
+        "season": 1,
+        "measured": true,
+        "offset_arcsec": 0.578,
+        "error_arcsec": 0.28
+      },
+      {
+        "season": 2,
+        "measured": true,
+        "offset_arcsec": 0.737,
+        "error_arcsec": 0.278
+      },
+      {
+        "season": 3,
+        "measured": true,
+        "offset_arcsec": 0.599,
+        "error_arcsec": 0.278
+      },
+      {
+        "season": 4,
+        "measured": true,
+        "offset_arcsec": 0.676,
+        "error_arcsec": 0.31
+      }
+    ]
+  },
+  "wise_0855": {
+    "motion": {
+      "measured_mas_yr": [
+        -8499.3,
+        1670.5
+      ],
+      "error_mas_yr": [
+        3177.2,
+        3177.2
+      ],
+      "measured_total_arcsec_yr": 8.662,
+      "catalog_total_arcsec_yr": 10.006,
+      "error_total_arcsec_yr": 3.177,
+      "seasons": [
+        2,
+        3
+      ]
+    },
+    "seasons": [
+      {
+        "season": 1,
+        "measured": false,
+        "offset_arcsec": null,
+        "error_arcsec": null
+      },
+      {
+        "season": 2,
+        "measured": true,
+        "offset_arcsec": 0.52,
+        "error_arcsec": 0.949
+      },
+      {
+        "season": 3,
+        "measured": true,
+        "offset_arcsec": 0.588,
+        "error_arcsec": 1.12
+      }
+    ]
+  }
+}

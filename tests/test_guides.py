@@ -174,6 +174,35 @@ def test_r_draconis_period_from_spherex_alone_matches_the_catalog():
     assert guides.measured_period("rw_aur") is None  # three clumps of seasons: no period claimed
 
 
+def test_moving_guides_use_the_measured_trajectory():
+    """Barnard and Epsilon Indi B tell the motion of docs/trajectory.json when it is precise."""
+    for target_id in ("barnard", "eps_indi_b", "wise_0855"):
+        motion = guides.measured_motion(target_id)
+        if not motion:
+            continue
+        guide = BY_ID[target_id]
+        facts = guide["facts"]
+        assert facts["measured_motion_arcsec_per_year"] == motion["measured_total_arcsec_yr"]
+        assert facts["measured_motion_error_arcsec_per_year"] == motion["error_total_arcsec_yr"]
+        sentence = guides._motion_text(target_id)
+        assert bool(sentence) == guides.precise(motion)
+        if sentence:
+            assert sentence.strip() in " ".join(reading(guide))
+    assert guides.precise(guides.measured_motion("barnard"))
+    assert not guides.precise({"measured_total_arcsec_yr": 8.66, "error_total_arcsec_yr": 3.18})
+
+
+def test_barnard_moves_as_the_catalog_says():
+    """The check in the plan: Barnard's measured motion is close to the catalog's."""
+    motion = guides.measured_motion("barnard")
+    if motion is None:
+        pytest.skip("no docs/trajectory.json")
+    measured, catalog = motion["measured_total_arcsec_yr"], motion["catalog_total_arcsec_yr"]
+    assert measured == pytest.approx(catalog, rel=0.1)
+    assert abs(measured - catalog) <= 2 * motion["error_total_arcsec_yr"]
+    assert "SPHEREx measured 1.70 pixels a year" in BY_ID["barnard"]["how_to_look"]["text"]
+
+
 def test_barnard_is_shown_where_its_saturated_center_is_smallest():
     assert BY_ID["barnard"]["how_to_look"]["detectors"] == [5, 6]
 
