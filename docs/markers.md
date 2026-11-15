@@ -47,7 +47,7 @@ No marker out of place.
 
 Sum pixels far below the sky (10 sigma or more, left out; a silver problem): D6 s0 (4), D6 s1 (3), D6 s2 (3), D6 s3 (7).
 
-Asteroids (SkyBoT, not judged): 294 markers, 22 with light under them.
+Asteroids (SkyBoT, not judged): 300 markers, 24 with light under them.
 
 No marker out of place.
 
