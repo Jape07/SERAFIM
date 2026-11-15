@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=summary1";
+import { apply, lang, onChange, t } from "./i18n.js?v=gif1";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
