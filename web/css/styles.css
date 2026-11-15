@@ -329,12 +329,7 @@ h2 { margin: 0 0 0.35rem; font-size: 1.7rem; color: var(--ink); }
 .card-coords { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--muted); }
 .card-look { color: var(--text); }
 .search-cross { stroke: var(--amber); stroke-width: 1.4; fill: none; }
-.sky-grid {
-  background-image: radial-gradient(#38bdf8 1px, transparent 1px);
-  background-size: 24px 24px;
-  opacity: 0.22;
-  pointer-events: none;
-}
+.sky-grid { display: none; }
 .sky-glow { display: none; }
 .sky img { width: 100%; height: 100%; object-fit: cover; }
 .sky svg { width: 100%; height: 100%; pointer-events: none; }
@@ -425,12 +420,20 @@ h2 { margin: 0 0 0.35rem; font-size: 1.7rem; color: var(--ink); }
 #comparador .photo { padding: 0.85rem 0.9rem 0.9rem; gap: 0.7rem; box-shadow: none; }
 #comparador .photo header { align-items: center; }
 #comparador .frame-title { justify-content: flex-start; gap: 0.45rem; font-size: 0.92rem; }
+#sky,
 #comparador .sky {
   aspect-ratio: 16 / 10;
   border-radius: 12px;
   border-color: #0f172a;
   box-shadow: none;
 }
+#sky .sky-stage {
+  top: 0;
+  aspect-ratio: auto;
+  transform: none;
+}
+#sky .sky-stage img,
+#sky .sky-stage svg { object-fit: fill; }
 #comparador .sky img,
 #comparador .sky svg { object-fit: fill; }
 #comparador .float.bl {
@@ -553,22 +556,7 @@ h2 { margin: 0 0 0.35rem; font-size: 1.7rem; color: var(--ink); }
 
 .gif-controls { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.85rem; }
 .choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
-#modes.choice { grid-template-columns: repeat(2, 1fr); margin-top: 0.7rem; }
-#layers.choice { grid-template-columns: repeat(auto-fit, minmax(6.2rem, 1fr)); margin-top: 0; }
-#candidates { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1.4rem; }
-#candidates .target-block { display: flex; flex-direction: column; gap: 0.65rem; }
-#candidates .target-block h3 { margin: 0; font-size: 1rem; }
-#candidates .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.7rem; }
-#candidates .card, #dipole-detail .card { min-height: 0; gap: 0.4rem; }
-.dipole-status { margin: 0; font-size: 1.05rem; color: var(--ink); }
-.dipole-reason, .dipole-meta, .dipole-ai { margin: 0; }
-.dipole-ai a { color: var(--accent-ink); text-decoration: underline; }
-.sky svg .dipole { pointer-events: auto; cursor: pointer; }
-.sky svg .dipole-hit { stroke: transparent; stroke-width: 10; fill: none; }
-.sky svg .dipole-line { stroke: #f5c400; stroke-width: 1.6; fill: none; }
-.sky svg .dipole-head { fill: #f5c400; }
-.sky svg .dipole.selected .dipole-line { stroke: #ffffff; stroke-width: 2.3; }
-.sky svg .dipole.selected .dipole-head { fill: #ffffff; }
+#modes.choice, #layers.choice { grid-template-columns: repeat(2, 1fr); margin-top: 0.7rem; }
 .sky svg .marker { pointer-events: auto; cursor: pointer; }
 .sky svg .marker circle, .sky svg .marker rect, .sky svg .marker polygon {
   fill: none;
@@ -608,7 +596,8 @@ h2 { margin: 0 0 0.35rem; font-size: 1.7rem; color: var(--ink); }
 #creador-gif .gif-avail { flex-direction: row; justify-content: space-between; align-items: center; }
 #creador-gif .gif-avail strong { font-size: 0.95rem; }
 #creador-gif .gif-story { display: flex; flex-direction: column; gap: 0.7rem; }
-#creador-gif .gif-stage { aspect-ratio: 16 / 10; min-height: 16rem; border-color: #0f172a; }
+#creador-gif .gif-stage { aspect-ratio: 16 / 10; min-height: 16rem; border-color: #0f172a; box-shadow: none; }
+#creador-gif .gif-stage img { object-fit: fill; }
 #creador-gif .gif-chip {
   position: absolute;
   z-index: 3;
