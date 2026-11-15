@@ -189,7 +189,12 @@ def test_mock_gold_has_what_the_web_needs(gold):
     assert 0 not in set(asteroids.season)
     assert (asteroids.groupby("season").date_utc.nunique() > 1).all()
     assert spectra.flag.isna().any() and spectra.flag.notna().any()
-    assert len(read(gold, "trajectory.parquet")) == 3
+    trajectory = read(gold, "trajectory.parquet")
+    assert len(trajectory) == 3
+    # One season without a measurement: all three measured columns are null together.
+    unmeasured = trajectory[trajectory.season == 2]
+    assert unmeasured[["ra_measured", "dec_measured", "error_arcsec"]].isna().all().all()
+    assert trajectory[trajectory.season != 2][["ra_measured", "dec_measured"]].notna().all().all()
 
     assert meta["n_frames"] == len(frames) == 51
     assert meta["collections"] == load_config()["settings"]["collections"]

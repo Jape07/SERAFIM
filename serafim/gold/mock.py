@@ -11,8 +11,9 @@ cell, so the tables and PNGs have the same shape as real gold:
   task D7), so the star does not look like a hole;
 - a `motion` target moves between seasons (exaggerated: 5 px per season, so the video and
   the difference images show it) and a `brightness` target changes its flux;
-- `catalogs`, `spectra` and `trajectory` have example rows. Their names and values are
-  placeholders: AI & validation fills the real ones (tasks A2, A4 and A5).
+- `catalogs`, `spectra` and `trajectory` have example rows, with the nulls the contract allows
+  (no `mag` or `url` for a source, no `flag` on a good point, no measurement in season 2).
+  Their names and values are placeholders: AI & validation fills the real ones (A2, A4, A5).
 
 Everything comes from a fixed seed, so two runs write the same tables and PNGs (only
 meta.json changes: it records the run date).
@@ -50,6 +51,7 @@ SEASONS = {
     3: ("2026-08-16", "spherex_qr3"),
 }
 HOLE = (6, 1)  # (detector, season) without frames
+UNMEASURED_SEASON = 2  # trajectory has no measurement (null) for this season
 SATURATED_DETECTORS = (1, 2)
 SATURATED_FLAGS = "BLOOM,OVERFLOW"
 SATURATED_RADIUS_PX = 2.2
@@ -427,20 +429,24 @@ def _spectra(target: dict, frames: pd.DataFrame, rng: np.random.Generator) -> pd
 
 
 def _trajectory(target: dict, wcs: WCS, n: int, rng: np.random.Generator) -> pd.DataFrame:
-    """The catalog position of the target each season, and a measurement within ~1 arcsec."""
+    """The catalog position of the target each season, and a measurement within ~1 arcsec.
+
+    One season (UNMEASURED_SEASON) has no measurement, so the site can test a gap.
+    """
     rows = []
     for season in SEASONS:
         ra, dec = png_to_sky(wcs, *target_xy(target["kind"], n, season))
         error = round(float(rng.uniform(0.8, 1.6)), 2)
         d_ra = rng.normal(0, 0.5) / 3600 / np.cos(np.radians(dec))
         d_dec = rng.normal(0, 0.5) / 3600
+        measured = season != UNMEASURED_SEASON
         rows.append(
             {
                 "target_id": target["id"],
                 "season": season,
-                "ra_measured": round(float(ra + d_ra), 6),
-                "dec_measured": round(float(dec + d_dec), 6),
-                "error_arcsec": error,
+                "ra_measured": round(float(ra + d_ra), 6) if measured else None,
+                "dec_measured": round(float(dec + d_dec), 6) if measured else None,
+                "error_arcsec": error if measured else None,
                 "ra_catalog": round(float(ra), 6),
                 "dec_catalog": round(float(dec), 6),
             }
