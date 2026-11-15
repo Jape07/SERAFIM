@@ -19,9 +19,9 @@ Every `.npz` has only numpy arrays (float32, bool, int16) and the WCS as text in
 so it opens with `numpy.load(path)` anywhere, without `serafim` and without pickle. Arrays are
 `array[y, x]` with row 0 = south (see grid.py).
 
-Read silver with `load_frame()` and `load_sum()` (`load_difference()` comes in D6).
+Read silver with `load_frame()`, `load_sum()` and `load_difference()`.
 """
 
-from serafim.silver.store import load_frame, load_sum
+from serafim.silver.store import load_difference, load_frame, load_sum
 
-__all__ = ["load_frame", "load_sum"]
+__all__ = ["load_difference", "load_frame", "load_sum"]

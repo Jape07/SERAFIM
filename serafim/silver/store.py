@@ -25,6 +25,16 @@ def sum_path(target_id: str, detector: int, season: int, root: Path | None = Non
     return silver_dir(root) / target_id / "sums" / f"d{detector}_s{season}.npz"
 
 
+def difference_path(
+    target_id: str, detector: int, season_a: int, season_b: int, root: Path | None = None
+) -> Path:
+    return silver_dir(root) / target_id / "differences" / f"d{detector}_s{season_a}-s{season_b}.npz"
+
+
+def differences_table_path(root: Path | None = None) -> Path:
+    return silver_dir(root) / "differences.parquet"
+
+
 def frames_table_path(root: Path | None = None) -> Path:
     return silver_dir(root) / "frames.parquet"
 
@@ -52,6 +62,20 @@ def load_sum(target_id: str, detector: int, season: int, root: Path | None = Non
     """
     arrays = _load(sum_path(target_id, detector, season, root))
     arrays["mean_mjd"] = float(arrays["mean_mjd"])
+    return arrays
+
+
+def load_difference(
+    target_id: str, detector: int, season_a: int, season_b: int, root: Path | None = None
+) -> dict:
+    """One silver difference (season b minus season a): difference, error, mask, saturated,
+    season_a, season_b and wcs.
+
+    Arrays are array[y, x], indices from 0, row 0 = south, and wcs.pixel_to_world(x, y) is the
+    position of pixel (x, y). Units and meaning of each array: see serafim/silver/differences.py.
+    """
+    arrays = _load(difference_path(target_id, detector, season_a, season_b, root))
+    arrays["season_a"], arrays["season_b"] = int(arrays["season_a"]), int(arrays["season_b"])
     return arrays
 
 
