@@ -344,15 +344,23 @@ def blend_fit(
 
 
 def neighbours(target: dict, season_mjds: list[float], radius_arcsec: float = 20.0,
-               max_mag: float = 19.0):  # fmt: skip
+               max_mag: float = 19.0, cone_deg: float | None = None):  # fmt: skip
     """Gaia stars that come within `radius_arcsec` of the target during these seasons.
 
     The target's own Gaia entry (within 2 arcsec of it at the Gaia epoch) is left out.
+    `cone_deg` picks the Gaia query (default: radius + 90 arcsec); passing the catalog-layer
+    cone of task A2 reuses its cache. If Gaia does not answer and nothing is cached, the
+    problem is logged and no neighbour is returned, so a measurement still runs.
     """
     from serafim.validation import catalogs, layers
 
     center = SkyCoord(target["ra_now"] * u.deg, target["dec_now"] * u.deg)
-    found = catalogs.gaia(center, (radius_arcsec + 90) / 3600 * u.deg, max_mag=max_mag)
+    cone = cone_deg if cone_deg is not None else (radius_arcsec + 90) / 3600
+    try:
+        found = catalogs.gaia(center, cone * u.deg, max_mag=max_mag)
+    except catalogs.CatalogUnavailable as error:
+        log.error("%s: no Gaia neighbours (Gaia unavailable): %s", target.get("id"), error)
+        return catalogs._empty()
     if found.empty:
         return found
     keep = np.zeros(len(found), dtype=bool)

@@ -46,6 +46,15 @@ PERIOD_SOURCE = "SIMBAD mesVar, Gaia DR3 long-period variables (2022yCat.1358)"
 # Barnard's Star: its motion measured on the ring matches the catalog to 0.1 px in D5-D6,
 # where its saturated center is smallest.
 SEEN_DETECTORS = {"wise_0855": (6, 5), "barnard": (5, 6)}
+
+# Brightness change of the saturated targets, measured on the light around their saturated
+# core (python -m serafim.validation.light_curves -> docs/light_curves.json). Barnard's Star,
+# not variable, scatters by up to ~30 % in one detector, so only larger changes are told.
+LIGHT_CURVES_PATH = targets.ROOT / "docs" / "light_curves.json"
+CHANGE_THRESHOLD = 0.3
+MAX_RATIO_ERROR = 0.3
+MIN_FRAMES = 3  # a season ratio from fewer frames is not told
+SYSTEMATIC_SCATTER = 0.15
 VISIBILITY_SOURCE = "docs/visibility.md (real SPHEREx frames)"
 
 # A background star that a target passes very close to, from Gaia DR3 (epoch 2016.0); found by
@@ -225,6 +234,15 @@ def target_facts(target: dict) -> dict:
         facts["period_days"] = PERIOD_DAYS[target["id"]]
     if target["id"] in SEEN_DETECTORS:
         facts["seen_in_detectors"] = list(SEEN_DETECTORS[target["id"]])
+    rows = light_curve(target["id"]) if target["kind"] == "brightness" else None
+    if rows:
+        ratios: dict[str, dict[str, float]] = {}
+        for row in certain(rows):
+            ratios.setdefault(str(row["detector"]), {})[str(row["season"])] = round(row["ratio"], 2)
+        facts["brightness_vs_first_season"] = ratios
+        period = measured_period(target["id"])
+        if period:
+            facts["measured_period_days"] = period["period_days"]
     if target["id"] in NEIGHBOURS:
         star = NEIGHBOURS[target["id"]]
         facts["neighbour_star"] = {
@@ -388,8 +406,66 @@ def _wise_0855(target: dict, facts: dict) -> dict:
     }
 
 
+def _light_curves() -> dict:
+    if not LIGHT_CURVES_PATH.exists():
+        return {}
+    return json.loads(LIGHT_CURVES_PATH.read_text(encoding="utf-8"))
+
+
+def light_curve(target_id: str) -> list[dict] | None:
+    """Per (detector, season) brightness relative to the first season, measured on the rings
+    of the saturated targets (docs/light_curves.json, from serafim.validation.light_curves)."""
+    return (_light_curves().get(target_id) or {}).get("by_detector") or None
+
+
+def measured_period(target_id: str) -> dict | None:
+    """The period found in the SPHEREx light curve alone, only if it is a real one."""
+    period = (_light_curves().get(target_id) or {}).get("period")
+    return period if period and period.get("periodic") else None
+
+
+def certain(rows: list[dict]) -> list[dict]:
+    """Season ratios (not the reference) known to better than 30 %, from 3 frames or more."""
+    return [
+        r
+        for r in rows
+        if 0 < r["error"] <= MAX_RATIO_ERROR * r["ratio"] and r.get("n_frames", 0) >= MIN_FRAMES
+    ]
+
+
+def strongest_change(rows: list[dict]) -> dict | None:
+    """The largest certain change, if it is beyond what the Barnard control allows."""
+    real = [r for r in certain(rows) if abs(r["ratio"] - 1) > CHANGE_THRESHOLD]
+    if not real:
+        return None
+
+    def significance(row: dict) -> float:
+        spread = math.hypot(row["error"] / row["ratio"], SYSTEMATIC_SCATTER)
+        return abs(math.log(row["ratio"])) / spread
+
+    return max(real, key=significance)
+
+
+def _change_text(rows: list[dict]) -> str:
+    change = strongest_change(rows)
+    if change is None:
+        return (
+            f"SPHEREx shows no change larger than its method can measure (about "
+            f"{CHANGE_THRESHOLD:.0%})."
+        )
+    reference = next(r for r in rows if r["detector"] == change["detector"] and r["error"] == 0)
+    when, before = _month(change["mean_date_utc"]), _month(reference["mean_date_utc"])
+    if change["ratio"] >= 1:
+        how = f"{change['ratio']:.1f} times as bright in {when} as in {before}"
+    else:
+        how = f"{1 / change['ratio']:.1f} times fainter in {when} than in {before}"
+    return f"Measured: in detector {change['detector']} it was {how}."
+
+
 def _rw_aur(target: dict, facts: dict) -> dict:
     best = least_saturated(target)
+    rows = light_curve(target["id"])
+    measured = f" {_change_text(rows)}" if rows else ""
     return {
         "headline": "A young star that dims without warning",
         "what_it_is": (
@@ -399,7 +475,7 @@ def _rw_aur(target: dict, facts: dict) -> dict:
         "what_to_look_at": (
             "It does not move. Keep the same detector and step through the "
             f"{facts['seasons']} seasons: its brightness can change from one season to the "
-            "next."
+            f"next.{measured}"
         ),
         "detectors": best,
         "mode": "sum",
@@ -414,6 +490,21 @@ def _rw_aur(target: dict, facts: dict) -> dict:
 
 def _r_dra(target: dict, facts: dict) -> dict:
     months = facts["period_days"] / 30.44
+    rows = light_curve(target["id"])
+    period = measured_period(target["id"])
+    # With a measurement there is no room (150 words) for the hint about the glow
+    glow = (
+        []
+        if rows
+        else ["Compare the size of its glow: when the star is brighter, the glow is bigger."]
+    )
+    if period:
+        measured = (
+            " Measured with SPHEREx alone: it brightens and fades every "
+            f"{period['period_days']:.0f} days or so; catalogs say {facts['period_days']:.0f}."
+        )
+    else:
+        measured = f" {_change_text(rows)}" if rows else ""
     return {
         "headline": f"A giant star that swells and fades every {months:.0f} months",
         "what_it_is": (
@@ -424,7 +515,7 @@ def _r_dra(target: dict, facts: dict) -> dict:
         "what_to_look_at": (
             f"Keep one detector and step through the {facts['seasons']} seasons. They fall at "
             "different points of its cycle, so it should look brighter in some seasons than in "
-            "others."
+            f"others.{measured}"
         ),
         "detectors": sorted(detectors_seen(target)),
         "mode": "sum",
@@ -432,7 +523,7 @@ def _r_dra(target: dict, facts: dict) -> dict:
         "how": "Any detector, one season at a time.",
         "watch_out": [
             _saturated_text(target),
-            "Compare the size of its glow: when the star is brighter, the glow is bigger.",
+            *glow,
             f"It sits near the spot SPHEREx passes over most often, so it has {facts['frames']} "
             "frames, far more than the others.",
         ],

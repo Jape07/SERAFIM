@@ -1,0 +1,855 @@
+{
+  "r_dra": {
+    "by_detector": [
+      {
+        "detector": 1,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 12,
+        "overlap_um": 0.3509753979380965,
+        "ring_px": [
+          10.0,
+          13.0
+        ],
+        "mean_date_utc": "2025-07-08T16:05:47+00:00"
+      },
+      {
+        "detector": 1,
+        "season": 2,
+        "ratio": 0.45927502610020216,
+        "error": 0.08318268614454655,
+        "n_frames": 12,
+        "overlap_um": 0.3073461439318218,
+        "ring_px": [
+          10.0,
+          13.0
+        ],
+        "mean_date_utc": "2025-10-08T01:03:45+00:00"
+      },
+      {
+        "detector": 1,
+        "season": 4,
+        "ratio": 0.9912317120317813,
+        "error": 0.18094306443963615,
+        "n_frames": 12,
+        "overlap_um": 0.3509753979380965,
+        "ring_px": [
+          10.0,
+          13.0
+        ],
+        "mean_date_utc": "2026-08-16T22:22:08+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 12,
+        "overlap_um": 0.4073375146936007,
+        "ring_px": [
+          9.0,
+          12.0
+        ],
+        "mean_date_utc": "2025-06-22T09:28:25+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 2,
+        "ratio": 0.4630743630198579,
+        "error": 0.08213875808601395,
+        "n_frames": 12,
+        "overlap_um": 0.4073375146936007,
+        "ring_px": [
+          9.0,
+          12.0
+        ],
+        "mean_date_utc": "2025-11-30T17:50:18+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 4,
+        "ratio": 0.387812663995532,
+        "error": 0.07279025453645199,
+        "n_frames": 12,
+        "overlap_um": 0.4073375146936007,
+        "ring_px": [
+          9.0,
+          12.0
+        ],
+        "mean_date_utc": "2026-06-22T05:49:15+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 12,
+        "overlap_um": 0.7838219118065584,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-05-19T13:01:22+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 2,
+        "ratio": 0.9654439451357966,
+        "error": 0.20641761439650433,
+        "n_frames": 11,
+        "overlap_um": 0.6485829560483476,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-12-29T06:34:01+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 3,
+        "ratio": 1.0097617385766062,
+        "error": 0.20724978562771207,
+        "n_frames": 11,
+        "overlap_um": 0.7699770092237097,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-16T05:10:17+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 4,
+        "ratio": 0.33303069840573785,
+        "error": 0.07002766890088416,
+        "n_frames": 10,
+        "overlap_um": 0.7378652828309362,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-06-01T05:40:40+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 7,
+        "overlap_um": 1.2928689347618305,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-06-30T23:10:22+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 2,
+        "ratio": 0.6041784811244283,
+        "error": 0.051531373612747546,
+        "n_frames": 11,
+        "overlap_um": 1.2537243909071294,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-10-10T12:57:57+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 4,
+        "ratio": 0.6614090942630982,
+        "error": 0.056602520637276284,
+        "n_frames": 10,
+        "overlap_um": 1.2928689347618305,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-08-18T21:19:39+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 12,
+        "overlap_um": 0.29375955135331955,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-06-21T20:51:11+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 2,
+        "ratio": 0.7406617326211737,
+        "error": 0.034799266392785015,
+        "n_frames": 11,
+        "overlap_um": 0.29375955135331955,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-12-03T18:52:33+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 4,
+        "ratio": 0.6330247011284331,
+        "error": 0.033030912729692156,
+        "n_frames": 7,
+        "overlap_um": 0.29375955135331955,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-06-22T03:41:48+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 10,
+        "overlap_um": 0.4786906094679946,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-05-22T02:10:30+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 2,
+        "ratio": 0.8281252591338568,
+        "error": 0.0361113740124207,
+        "n_frames": 8,
+        "overlap_um": 0.4321653085798305,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-12-31T10:54:21+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 3,
+        "ratio": 0.8449376182518774,
+        "error": 0.03819480754862599,
+        "n_frames": 8,
+        "overlap_um": 0.4719648800801597,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-03T00:13:15+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 4,
+        "ratio": 0.4779404801008534,
+        "error": 0.021335964544878214,
+        "n_frames": 7,
+        "overlap_um": 0.3157447629370491,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-05-30T02:36:29+00:00"
+      }
+    ],
+    "combined": [
+      {
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "detectors": 6
+      },
+      {
+        "season": 2,
+        "ratio": 0.7449965590150709,
+        "error": 0.08540970506062925,
+        "detectors": 6,
+        "lowest": 0.45927502610020216,
+        "highest": 0.9654439451357966
+      },
+      {
+        "season": 3,
+        "ratio": 0.8519324626336069,
+        "error": 0.053676555569245735,
+        "detectors": 2,
+        "lowest": 0.8449376182518774,
+        "highest": 1.0097617385766062
+      },
+      {
+        "season": 4,
+        "ratio": 0.5514025992828452,
+        "error": 0.08184977544314075,
+        "detectors": 6,
+        "lowest": 0.33303069840573785,
+        "highest": 0.9912317120317813
+      }
+    ],
+    "period": {
+      "period_days": 243.5,
+      "half_power_days": [
+        199.2,
+        314.1
+      ],
+      "power": 0.626,
+      "false_alarm": 0.005,
+      "months": 18,
+      "periodic": true
+    }
+  },
+  "rw_aur": {
+    "by_detector": [
+      {
+        "detector": 1,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 11,
+        "overlap_um": 0.3725570969086738,
+        "ring_px": [
+          2.0,
+          5.0
+        ],
+        "mean_date_utc": "2025-09-03T00:24:21+00:00"
+      },
+      {
+        "detector": 1,
+        "season": 2,
+        "ratio": 1.3850047607409284,
+        "error": 0.07969007355250872,
+        "n_frames": 10,
+        "overlap_um": 0.3389844756825613,
+        "ring_px": [
+          2.0,
+          5.0
+        ],
+        "mean_date_utc": "2026-03-08T05:59:06+00:00"
+      },
+      {
+        "detector": 1,
+        "season": 3,
+        "ratio": 1.5428874274742417,
+        "error": 0.09064982491596836,
+        "n_frames": 9,
+        "overlap_um": 0.3146837515166335,
+        "ring_px": [
+          2.0,
+          5.0
+        ],
+        "mean_date_utc": "2026-09-05T22:33:19+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 12,
+        "overlap_um": 0.49212007906008615,
+        "ring_px": [
+          4.0,
+          7.0
+        ],
+        "mean_date_utc": "2025-09-09T07:16:53+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 2,
+        "ratio": 1.2052301087790598,
+        "error": 0.033993931227930284,
+        "n_frames": 10,
+        "overlap_um": 0.46162173967750797,
+        "ring_px": [
+          4.0,
+          7.0
+        ],
+        "mean_date_utc": "2026-03-03T23:57:27+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 3,
+        "ratio": 1.1460494860822685,
+        "error": 0.03233387643360065,
+        "n_frames": 10,
+        "overlap_um": 0.49212007906008615,
+        "ring_px": [
+          4.0,
+          7.0
+        ],
+        "mean_date_utc": "2026-09-12T21:16:23+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 5,
+        "overlap_um": 0.7846309608259845,
+        "ring_px": [
+          4.0,
+          7.0
+        ],
+        "mean_date_utc": "2025-09-16T19:28:26+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 2,
+        "ratio": 1.027667298321483,
+        "error": 0.053403678060309816,
+        "n_frames": 10,
+        "overlap_um": 0.7356840985204964,
+        "ring_px": [
+          4.0,
+          7.0
+        ],
+        "mean_date_utc": "2026-02-25T11:32:48+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 3,
+        "ratio": 0.998009453465544,
+        "error": 0.05590595204685598,
+        "n_frames": 9,
+        "overlap_um": 0.6508674368462259,
+        "ring_px": [
+          4.0,
+          7.0
+        ],
+        "mean_date_utc": "2026-09-15T05:09:44+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 3,
+        "overlap_um": 0.45996214131349156,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-09-03T22:21:47+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 2,
+        "ratio": 0.8969446469186847,
+        "error": 0.07031541544430586,
+        "n_frames": 9,
+        "overlap_um": 0.45996214131349156,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-07T09:07:05+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 3,
+        "ratio": 0.8727733649848405,
+        "error": 0.07103283680992417,
+        "n_frames": 7,
+        "overlap_um": 0.4068546981306165,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-09-07T20:52:58+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 5,
+        "overlap_um": 0.24474455819764485,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-09-09T21:10:26+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 2,
+        "ratio": 0.8621595773350169,
+        "error": 0.08586849792999722,
+        "n_frames": 6,
+        "overlap_um": 0.22516378335941134,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-04T18:49:51+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 3,
+        "ratio": 0.7392823305994809,
+        "error": 0.09697127760896578,
+        "n_frames": 5,
+        "overlap_um": 0.24474455819764485,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-09-13T08:11:05+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 11,
+        "overlap_um": 0.44835114470664106,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-09-18T10:19:04+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 2,
+        "ratio": 2.246924038710343,
+        "error": 0.7091898710801926,
+        "n_frames": 3,
+        "overlap_um": 0.07863222217991517,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-02-23T15:23:49+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 3,
+        "ratio": 4.709524787144756,
+        "error": 1.4380182015249636,
+        "n_frames": 1,
+        "overlap_um": 0.0,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-09-13T07:09:29+00:00"
+      }
+    ],
+    "combined": [
+      {
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "detectors": 6
+      },
+      {
+        "season": 2,
+        "ratio": 1.152100287266885,
+        "error": 0.09203210397000662,
+        "detectors": 5,
+        "lowest": 0.8621595773350169,
+        "highest": 1.3850047607409284
+      },
+      {
+        "season": 3,
+        "ratio": 1.1325641182220483,
+        "error": 0.12673398211759138,
+        "detectors": 5,
+        "lowest": 0.7392823305994809,
+        "highest": 1.5428874274742417
+      }
+    ],
+    "period": {
+      "period_days": 152.4,
+      "half_power_days": [
+        125.2,
+        171.2
+      ],
+      "power": 0.172,
+      "false_alarm": 0.005,
+      "months": 4,
+      "periodic": false
+    }
+  },
+  "barnard": {
+    "by_detector": [
+      {
+        "detector": 1,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 12,
+        "overlap_um": 0.3061144156186564,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-09-10T17:50:33+00:00"
+      },
+      {
+        "detector": 1,
+        "season": 2,
+        "ratio": 1.027398434736524,
+        "error": 0.03624958746266457,
+        "n_frames": 10,
+        "overlap_um": 0.29385341524846975,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-11T12:30:34+00:00"
+      },
+      {
+        "detector": 1,
+        "season": 3,
+        "ratio": 0.9805642448402312,
+        "error": 0.03459327118546804,
+        "n_frames": 10,
+        "overlap_um": 0.3061144156186564,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-08-26T09:22:11+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 8,
+        "overlap_um": 0.5278994563359787,
+        "ring_px": [
+          10.0,
+          13.0
+        ],
+        "mean_date_utc": "2025-08-26T21:33:17+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 2,
+        "ratio": 0.9960657098995803,
+        "error": 0.0877145875104446,
+        "n_frames": 9,
+        "overlap_um": 0.38170523068948836,
+        "ring_px": [
+          10.0,
+          13.0
+        ],
+        "mean_date_utc": "2026-03-17T04:15:38+00:00"
+      },
+      {
+        "detector": 2,
+        "season": 3,
+        "ratio": 1.3040167081403204,
+        "error": 0.10341058818271351,
+        "n_frames": 12,
+        "overlap_um": 0.40957286931508197,
+        "ring_px": [
+          10.0,
+          13.0
+        ],
+        "mean_date_utc": "2026-08-24T06:40:27+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 9,
+        "overlap_um": 0.7409035283024286,
+        "ring_px": [
+          7.0,
+          10.0
+        ],
+        "mean_date_utc": "2025-08-20T05:09:41+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 2,
+        "ratio": 1.199940746387344,
+        "error": 0.1664941710128539,
+        "n_frames": 12,
+        "overlap_um": 0.6708841510956438,
+        "ring_px": [
+          7.0,
+          10.0
+        ],
+        "mean_date_utc": "2026-03-28T05:02:57+00:00"
+      },
+      {
+        "detector": 3,
+        "season": 3,
+        "ratio": 1.2750491021043822,
+        "error": 0.18458469640127773,
+        "n_frames": 9,
+        "overlap_um": 0.7093337784125604,
+        "ring_px": [
+          7.0,
+          10.0
+        ],
+        "mean_date_utc": "2026-08-18T05:07:11+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 4,
+        "overlap_um": 0.49420758680123145,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-09-06T08:25:53+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 2,
+        "ratio": 1.0949761373903129,
+        "error": 0.04787928705950655,
+        "n_frames": 5,
+        "overlap_um": 0.49420758680123145,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-11T09:06:15+00:00"
+      },
+      {
+        "detector": 4,
+        "season": 3,
+        "ratio": 1.0616089852376545,
+        "error": 0.04519695779865743,
+        "n_frames": 6,
+        "overlap_um": 0.46971840543429844,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-08-26T21:06:38+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 10,
+        "overlap_um": 0.4447514017072711,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-08-26T14:33:40+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 2,
+        "ratio": 0.9580473747609084,
+        "error": 0.032226005243425206,
+        "n_frames": 7,
+        "overlap_um": 0.4447514017072711,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-03-17T16:35:23+00:00"
+      },
+      {
+        "detector": 5,
+        "season": 3,
+        "ratio": 0.9939552020999178,
+        "error": 0.032767088878161967,
+        "n_frames": 9,
+        "overlap_um": 0.4447514017072711,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-08-22T02:31:24+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "n_frames": 5,
+        "overlap_um": 0.4007595766994152,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2025-08-21T21:34:58+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 2,
+        "ratio": 1.0411642518919189,
+        "error": 0.054667993875969975,
+        "n_frames": 10,
+        "overlap_um": 0.4007595766994152,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-04-02T09:22:31+00:00"
+      },
+      {
+        "detector": 6,
+        "season": 3,
+        "ratio": 1.1499668624632222,
+        "error": 0.06233569430476465,
+        "n_frames": 7,
+        "overlap_um": 0.30379008427951515,
+        "ring_px": [
+          11.0,
+          14.0
+        ],
+        "mean_date_utc": "2026-08-18T07:50:14+00:00"
+      }
+    ],
+    "combined": [
+      {
+        "season": 1,
+        "ratio": 1.0,
+        "error": 0.0,
+        "detectors": 6
+      },
+      {
+        "season": 2,
+        "ratio": 1.02012920154166,
+        "error": 0.030080602979167387,
+        "detectors": 6,
+        "lowest": 0.9580473747609084,
+        "highest": 1.199940746387344
+      },
+      {
+        "season": 3,
+        "ratio": 1.0408475375968904,
+        "error": 0.04764907781150272,
+        "detectors": 6,
+        "lowest": 0.9805642448402312,
+        "highest": 1.3040167081403204
+      }
+    ],
+    "period": {
+      "period_days": 83.6,
+      "half_power_days": [
+        80.0,
+        88.6
+      ],
+      "power": 0.054,
+      "false_alarm": 0.2488,
+      "months": 8,
+      "periodic": false
+    }
+  }
+}
