@@ -23,10 +23,11 @@ permissions:
   pages: write
   id-token: write
 
-# A new run waits for the one in progress instead of cancelling it: cancelling a long first
-# download would throw away its work.
+# A new run of the same branch waits for the one in progress instead of cancelling it (cancelling
+# a long first download would throw away its work), and runs of other branches never touch it.
+# Only the deploy job shares the "pages" group, so two deploys never overlap.
 concurrency:
-  group: pages
+  group: publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -83,6 +84,9 @@ jobs:
   deploy:
     needs: build
     if: github.event_name == 'push' || inputs.deploy
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment:
       name: github-pages

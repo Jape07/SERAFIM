@@ -97,7 +97,12 @@ def test_publish_builds_real_gold_and_never_the_simulated_one():
 
 
 def test_publish_does_not_cancel_a_run_in_progress():
+    # Runs of one branch wait for each other; other branches never cancel them.
     assert WORKFLOW["concurrency"]["cancel-in-progress"] is False
+    assert "github.ref" in WORKFLOW["concurrency"]["group"]
+    # Only deploys share the Pages group, and they wait too.
+    deploy = WORKFLOW["jobs"]["deploy"]["concurrency"]
+    assert deploy == {"group": "pages", "cancel-in-progress": False}
 
 
 def test_bronze_is_saved_even_when_the_run_fails_or_is_cancelled():
