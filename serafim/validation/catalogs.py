@@ -1,12 +1,16 @@
-"""Catalog queries with an on-disk cache (task A1, AI & validation).
+"""Catalog queries with an on-disk cache (tasks A1 and A2, AI & validation).
 
 - skybot(center, radius, date): known asteroids and comets at that exact date.
 - simbad(center, radius): stars, galaxies and other catalogued objects.
 - gaia(center, radius): Gaia DR3 sources, with their variability flag.
+- catwise(center, radius): CatWISE2020 infrared sources (WISE W1/W2).
 - fetch_for_frames(frames, regions): everything classify() needs for a run.
 
-The three catalogs return the same columns (COLUMNS), so classify() can match
-detections against all of them in the same way.
+Every catalog returns the same columns (COLUMNS), so classify() can match
+detections against all of them in the same way and layers.py can move every
+source to any date: pmra_mas_yr, pmdec_mas_yr and parallax_mas, with the
+position given at epoch_jyear. They are NaN when the catalog has no motion
+for that source (always for SkyBoT, whose positions are already at the date).
 
 Every query is cached in data/catalog_cache/ (empty answers too), has a timeout
 and 3 attempts. If a service does not answer and there is no cache, nothing can
@@ -41,7 +45,8 @@ TIMEOUT_S = 60
 RETRIES = 3
 BACKOFF_S = 1.0  # wait 1 s after the first failure, 2 s after the second
 
-COLUMNS = ["catalog", "name", "ra", "dec", "type", "is_variable", "mag", "url"]
+MOTION_COLUMNS = ["pmra_mas_yr", "pmdec_mas_yr", "parallax_mas", "epoch_jyear"]
+COLUMNS = ["catalog", "name", "ra", "dec", "type", "is_variable", "mag", "url", *MOTION_COLUMNS]
 
 # SIMBAD TAP services, tried in this order. In November 2026 the main CDS site
 # in Strasbourg went offline after a security incident; CDS lists these mirrors.
@@ -52,6 +57,21 @@ SIMBAD_TAP_SERVERS = (
 )
 GAIA_TAP_SERVER = "https://gea.esac.esa.int/tap-server/tap"
 GAIA_MAX_MAG = 19.0  # G magnitude limit: bright enough to leave residuals or be flagged
+GAIA_EPOCH_JYEAR = 2016.0  # Gaia DR3 positions (ref_epoch)
+SIMBAD_EPOCH_JYEAR = 2000.0  # SIMBAD basic.ra/dec are ICRS at epoch J2000
+
+# CatWISE2020 through IRSA Gator: it lets us pick columns. The cone search (SCS)
+# sends all 191 columns, about 20 KB per source, and a field has thousands.
+CATWISE_GATOR = "https://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query"
+CATWISE_COLUMNS = (
+    "source_name", "ra", "dec", "ra_pm", "dec_pm", "pmra", "pmdec", "sigpmra", "sigpmdec",
+    "w2mpro", "w2mpro_pm", "cc_flags", "ab_flags",
+)  # fmt: skip
+CATWISE_MAX_MAG = 15.0  # W2 (Vega) ~ 18.3 AB: about what a SPHEREx season sum shows
+# ra_pm/dec_pm are at MJD 57170 (CatWISE2020 explanatory supplement)
+CATWISE_EPOCH_JYEAR = float(Time(57170.0, format="mjd").jyear)
+PM_MIN_SIGMA = 5.0  # CatWISE motions below 5 sigma are noise: the source stays fixed
+IRSA_WAITS_S = (5, 10, 15)  # IRSA answers 502/503 now and then; a later try works
 
 # SIMBAD object types that mean "this source changes brightness". In the current
 # SIMBAD hierarchy many of them do not hang from V* (RR Lyrae sit under Ev*,
@@ -84,14 +104,16 @@ def skybot(center: SkyCoord, radius: Angle | u.Quantity, date: Time) -> pd.DataF
     """
     radius = Angle(radius)
     params = {**_cone(center, radius), "date_utc": date.utc.isot}
-    return _cached("skybot", params, lambda: _from_skybot(_query_skybot(center, radius, date)))
+    return _cached(
+        "skybot", params, lambda: _from_skybot(_query_skybot(center, radius, date)), COLUMNS
+    )
 
 
 def simbad(center: SkyCoord, radius: Angle | u.Quantity) -> pd.DataFrame:
     """SIMBAD objects inside the cone; is_variable comes from SIMBAD_VARIABLE_TYPES."""
     radius = Angle(radius)
     params = _cone(center, radius)
-    return _cached("simbad", params, lambda: _from_simbad(*_query_simbad(center, radius)))
+    return _cached("simbad", params, lambda: _from_simbad(*_query_simbad(center, radius)), COLUMNS)
 
 
 def gaia(
@@ -100,7 +122,33 @@ def gaia(
     """Gaia DR3 sources brighter than max_mag (G band) inside the cone."""
     radius = Angle(radius)
     params = {**_cone(center, radius), "max_mag": max_mag}
-    return _cached("gaia", params, lambda: _from_gaia(_query_gaia(center, radius, max_mag)))
+    return _cached(
+        "gaia", params, lambda: _from_gaia(_query_gaia(center, radius, max_mag)), COLUMNS
+    )
+
+
+def catwise(
+    center: SkyCoord, radius: Angle | u.Quantity, max_mag: float = CATWISE_MAX_MAG
+) -> pd.DataFrame:
+    """CatWISE2020 sources brighter than max_mag (W2) inside the cone.
+
+    - The magnitude is the brighter of the fixed fit (w2mpro) and the moving fit
+      (w2mpro_pm): a fast mover like WISE 0855 is smeared in the fixed fit and
+      looks ~2 mag fainter there.
+    - Sources with an upper-case letter in cc_flags or ab_flags are confirmed
+      artifacts (diffraction spikes, halos, ghosts) and are left out.
+    - The proper motion is kept only above PM_MIN_SIGMA; the position is then the
+      moving-fit one (ra_pm, dec_pm) at MJD 57170. Otherwise the source is fixed
+      at its mean position.
+    """
+    radius = Angle(radius)
+    params = {**_cone(center, radius), "max_mag": max_mag}
+    return _cached(
+        "catwise",
+        params,
+        lambda: _from_catwise(_query_catwise(center, radius), max_mag),
+        COLUMNS,
+    )
 
 
 def fetch_for_frames(frames: pd.DataFrame, regions: pd.DataFrame) -> pd.DataFrame | None:
@@ -168,7 +216,8 @@ def _query_skybot(center: SkyCoord, radius: Angle, date: Time) -> Table:
 
 def _query_simbad(center: SkyCoord, radius: Angle) -> tuple[Table, str]:
     adql = f"""
-        SELECT basic.main_id, basic.ra, basic.dec, basic.otype, allfluxes.V
+        SELECT basic.main_id, basic.ra, basic.dec, basic.otype, allfluxes.V,
+               basic.pmra, basic.pmdec, basic.plx_value
         FROM basic LEFT JOIN allfluxes ON basic.oid = allfluxes.oidref
         WHERE CONTAINS(POINT('ICRS', basic.ra, basic.dec), {_adql_circle(center, radius)}) = 1
     """
@@ -189,12 +238,49 @@ def _run_simbad(adql: str) -> tuple[Table, str]:
 
 def _query_gaia(center: SkyCoord, radius: Angle, max_mag: float) -> Table:
     adql = f"""
-        SELECT source_id, ra, dec, phot_g_mean_mag, phot_variable_flag
+        SELECT source_id, ra, dec, phot_g_mean_mag, phot_variable_flag,
+               pmra, pmdec, parallax, ref_epoch
         FROM gaiadr3.gaia_source
         WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), {_adql_circle(center, radius)})
           AND phot_g_mean_mag < {float(max_mag)}
     """
     return _run_tap(GAIA_TAP_SERVER, adql)
+
+
+def _query_catwise(center: SkyCoord, radius: Angle) -> Table:
+    from astropy.io import ascii
+
+    icrs = center.icrs
+    params = {
+        "catalog": "catwise_2020",
+        "spatial": "cone",
+        "objstr": f"{icrs.ra.deg:.6f} {icrs.dec.deg:.6f}",
+        "radius": f"{radius.to_value(u.arcsec):.2f}",
+        "radunits": "arcsec",
+        "outfmt": 1,  # IPAC table
+        "selcols": ",".join(CATWISE_COLUMNS),
+    }
+    session = _TimeoutSession()
+    for wait in (0, *IRSA_WAITS_S):
+        time.sleep(wait)
+        response = session.get(CATWISE_GATOR, params=params)
+        if response.status_code not in (502, 503, 504):
+            break
+        log.info("CatWISE: IRSA answered %d, trying again", response.status_code)
+    response.raise_for_status()
+    text = response.text
+    if "[struct stat" in text and "ERROR" in text:  # Gator reports errors with HTTP 200
+        raise RuntimeError(f"CatWISE Gator error: {text[:300]}")
+    if "\\RowsRetrieved" in text and _rows_retrieved(text) == 0:
+        return Table(names=CATWISE_COLUMNS)
+    return ascii.read(text, format="ipac")
+
+
+def _rows_retrieved(ipac_text: str) -> int:
+    for line in ipac_text.splitlines():
+        if line.startswith("\\RowsRetrieved"):
+            return int(line.split("=")[1])
+    return -1
 
 
 # --- Pure conversions to COLUMNS --------------------------------------------------
@@ -221,6 +307,7 @@ def _from_simbad(table: Table, server: str) -> pd.DataFrame:
     site = server.removesuffix("/simbad/sim-tap")
     names = [str(name).strip() for name in table["main_id"]]
     types = [str(kind).strip() for kind in table["otype"]]
+    pmra, pmdec = _floats(table["pmra"]), _floats(table["pmdec"])
     return _frame(
         catalog="SIMBAD",
         name=names,
@@ -230,6 +317,7 @@ def _from_simbad(table: Table, server: str) -> pd.DataFrame:
         is_variable=[kind in SIMBAD_VARIABLE_TYPES for kind in types],
         mag=_floats(table["V"]),
         url=[f"{site}/simbad/sim-id?Ident={quote(name)}" for name in names],
+        **_motion(pmra, pmdec, _floats(table["plx_value"]), SIMBAD_EPOCH_JYEAR),
     )
 
 
@@ -246,17 +334,82 @@ def _from_gaia(table: Table) -> pd.DataFrame:
         is_variable=[flag == "VARIABLE" for flag in flags],
         mag=_floats(table["phot_g_mean_mag"]),
         url=None,  # the Gaia archive has no page per source
+        **_motion(
+            _floats(table["pmra"]),
+            _floats(table["pmdec"]),
+            _floats(table["parallax"]),
+            _floats(table["ref_epoch"]),
+        ),
     )
+
+
+def _from_catwise(table: Table, max_mag: float) -> pd.DataFrame:
+    if len(table) == 0:
+        return _empty()
+    w2 = np.fmin(_floats(table["w2mpro"]), _floats(table["w2mpro_pm"]))
+    flags = [
+        a + b for a, b in zip(_strings(table["cc_flags"]), _strings(table["ab_flags"]), strict=True)
+    ]
+    artifact = np.array([any(char.isupper() for char in flag) for flag in flags], dtype=bool)
+    keep = (w2 < max_mag) & ~artifact
+    if not keep.any():
+        return _empty()
+
+    pmra, pmdec = _floats(table["pmra"])[keep], _floats(table["pmdec"])[keep]  # arcsec/yr
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sigma = np.hypot(
+            pmra / _floats(table["sigpmra"])[keep], pmdec / _floats(table["sigpmdec"])[keep]
+        )
+    moving = np.nan_to_num(sigma) > PM_MIN_SIGMA
+    ra = np.where(moving, _floats(table["ra_pm"])[keep], _floats(table["ra"])[keep])
+    dec = np.where(moving, _floats(table["dec_pm"])[keep], _floats(table["dec"])[keep])
+    nan = np.full(int(keep.sum()), np.nan)
+    return _frame(
+        catalog="CatWISE",
+        name=[f"CWISE {name}" for name in np.asarray(_strings(table["source_name"]))[keep]],
+        ra=ra,
+        dec=dec,
+        type="source",
+        is_variable=False,
+        mag=w2[keep],
+        url=None,  # IRSA has no page per source
+        pmra_mas_yr=np.where(moving, pmra * 1000, np.nan),
+        pmdec_mas_yr=np.where(moving, pmdec * 1000, np.nan),
+        parallax_mas=nan,
+        epoch_jyear=np.where(moving, CATWISE_EPOCH_JYEAR, np.nan),
+    )
+
+
+def _motion(pmra, pmdec, parallax, epoch) -> dict:
+    """Motion columns; the epoch is NaN where there is no proper motion."""
+    has_motion = np.isfinite(pmra) & np.isfinite(pmdec)
+    epoch = np.broadcast_to(np.asarray(epoch, dtype=float), pmra.shape)
+    return {
+        "pmra_mas_yr": pmra,
+        "pmdec_mas_yr": pmdec,
+        "parallax_mas": parallax,
+        "epoch_jyear": np.where(has_motion, epoch, np.nan),
+    }
 
 
 # --- Cache and retries ----------------------------------------------------------------
 
 
-def _cached(catalog: str, params: dict, fetch: Callable[[], pd.DataFrame]) -> pd.DataFrame:
+def _cached(
+    catalog: str,
+    params: dict,
+    fetch: Callable[[], pd.DataFrame],
+    columns: list[str] | None = None,
+) -> pd.DataFrame:
+    """The cached answer, or a fresh one. A cached file without `columns` (written by
+    an older version of this module) is asked again instead of being returned."""
     path = _cache_path(catalog, params)
     if path.exists():
-        log.debug("%s from cache %s", catalog, params)
-        return pd.read_parquet(path)
+        table = pd.read_parquet(path)
+        if columns is None or set(columns) <= set(table.columns):
+            log.debug("%s from cache %s", catalog, params)
+            return table
+        log.info("%s cache %s has old columns: asking again", catalog, params)
 
     table = _with_retries(catalog, params, fetch)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,14 +440,21 @@ def _cache_path(catalog: str, params: dict) -> Path:
 
 # --- Small helpers ----------------------------------------------------------------
 
-_DTYPES = {"ra": "float64", "dec": "float64", "mag": "float64", "is_variable": "bool"}
+_DTYPES = {
+    "ra": "float64",
+    "dec": "float64",
+    "mag": "float64",
+    "is_variable": "bool",
+    **dict.fromkeys(MOTION_COLUMNS, "float64"),
+}
 
 
 def _frame(**columns) -> pd.DataFrame:
+    """A DataFrame with COLUMNS; a column left out is NaN (motion) or None (text)."""
     n = len(columns["ra"])
     data = {}
     for name in COLUMNS:
-        value = columns[name]
+        value = columns.get(name)
         if value is None or isinstance(value, str | bool):
             value = [value] * n
         data[name] = pd.Series(value, dtype=_DTYPES.get(name, "str"))
@@ -312,6 +472,14 @@ def _floats(column, unit: u.Unit | None = None) -> np.ndarray:
         column = column.filled(np.nan * unit if has_unit else np.nan)
     values = column.to_value(unit) if has_unit and hasattr(column, "to_value") else column
     return np.asarray(values, dtype=float)
+
+
+def _strings(column) -> list[str]:
+    """Plain strings from an astropy column; masked values become ''."""
+    mask = np.ma.getmaskarray(column)
+    return [
+        "" if masked else str(value).strip() for value, masked in zip(column, mask, strict=True)
+    ]
 
 
 def _cone(center: SkyCoord, radius: Angle) -> dict:
