@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=gif1";
+import { apply, lang, onChange, t } from "./i18n.js?v=home1";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -150,6 +150,11 @@ function when(row) {
 function pngUrl(row) {
   if (!row?.png) return "";
   return new URL(`../gold/${row.png}`, import.meta.url).href;
+}
+
+function viewerPicture(frame) {
+  if (mode === "difference") return sumAt(frame.detector, frame.season_b) || frame;
+  return frame;
 }
 
 function skyFor(row) {
@@ -1345,14 +1350,15 @@ function applyFrame() {
   }
   const zoom = 15 / fovArcmin;
   const box = sky.clientWidth || stage.parentElement?.clientWidth || 0;
-  const tall = sky.clientHeight || box * 0.75;
-  if (!box) return;
-  const size = box * zoom;
+  const tall = sky.clientHeight || box * 0.625;
+  if (!box || !tall) return;
+  const sizeW = box * zoom;
+  const sizeH = tall * zoom;
   stage.style.transform = "none";
-  stage.style.width = `${size}px`;
-  stage.style.height = `${size}px`;
-  stage.style.left = `${box / 2 - fx * size}px`;
-  stage.style.top = `${tall / 2 - fy * size}px`;
+  stage.style.width = `${sizeW}px`;
+  stage.style.height = `${sizeH}px`;
+  stage.style.left = `${box / 2 - fx * sizeW}px`;
+  stage.style.top = `${tall / 2 - fy * sizeH}px`;
 }
 
 function drawCross() {
@@ -1471,7 +1477,7 @@ async function render() {
   const frame = sequence[index];
   if (!frame) return;
   const token = ++viewToken;
-  const pair = mode === "blink" ? blinkPair() : [frame];
+  const pair = mode === "blink" ? blinkPair() : [viewerPicture(frame)];
   const pictures = await Promise.all(pair.map((row) => loadImage(pngUrl(row)).catch(() => null)));
   if (token !== viewToken) return;
   const picture = pictures[0];
@@ -1613,7 +1619,7 @@ function restartPreview() {
   const preview = document.querySelector("#gif-preview");
   const show = () => {
     const frame = gifFrames[gifStep % Math.max(gifFrames.length, 1)];
-    if (frame) preview.src = skyFor(frame, sequence.indexOf(frame));
+    if (frame) preview.src = skyFor(viewerPicture(frame));
     gifStep += 1;
   };
   show();
@@ -1631,7 +1637,7 @@ async function makeGif() {
     );
     const encoder = GIFEncoder();
     for (const frame of gifFrames) {
-      const picture = await loadImage(skyFor(frame, sequence.indexOf(frame)));
+      const picture = await loadImage(skyFor(viewerPicture(frame)));
       const canvas = document.createElement("canvas");
       canvas.width = picture.naturalWidth;
       canvas.height = picture.naturalHeight;
@@ -1667,6 +1673,13 @@ function saveGif() {
 function renderRegions() {
   const host = document.querySelector("#region-cards");
   if (!host) return;
+  const icons = {
+    barnard: "star",
+    eps_indi_b: "blur_circular",
+    wise_0855: "ac_unit",
+    rw_aur: "star",
+    r_dra: "star",
+  };
   host.replaceChildren();
   for (const target of TARGETS) {
     const active = target.id === activeTarget;
@@ -1681,32 +1694,16 @@ function renderRegions() {
     const head = document.createElement("div");
     head.className = "card-title";
     const title = document.createElement("h3");
-    const code = document.createElement("span");
-    code.className = "code";
-    code.textContent = target.code;
-    title.append(code, document.createTextNode(target.name));
+    const icon = document.createElement("span");
+    icon.className = `region-icon ${target.id}`;
+    icon.innerHTML = `<span class="material-symbols-outlined">${icons[target.id] || "star"}</span>`;
+    title.append(icon, document.createTextNode(target.name));
     const badge = document.createElement("span");
     badge.className = active ? "tag amber" : "tag";
     badge.textContent = active ? t("inFocus") : t("available");
     head.append(title, badge);
-    const info = guide?.targets?.find((item) => item.id === target.id);
-    const placed = goldTargets.get(target.id);
     const text = document.createElement("p");
-    text.textContent = info?.what_to_look_at || t(`blurb_${target.id}`);
-    const coords = document.createElement("p");
-    coords.className = "card-coords";
-    const ra = placed?.ra_now ?? info?.facts?.ra_now ?? target.ra;
-    const dec = placed?.dec_now ?? info?.facts?.dec_now ?? target.dec;
-    coords.textContent = `RA ${hms(ra)}   Dec ${dms(dec)}`;
-    const look = document.createElement("p");
-    look.className = "card-look";
-    look.textContent = info?.how_to_look?.text || "";
-    const kindKey = { motion: "kindMotion", spectrum: "kindSpectrum", brightness: "kindBrightness" }[info?.kind];
-    const kind = document.createElement("span");
-    if (kindKey) {
-      kind.className = "tag indigo";
-      kind.textContent = t(kindKey);
-    }
+    text.textContent = t(`blurb_${target.id}`);
     const button = document.createElement("button");
     button.type = "button";
     button.className = active ? "amber wide" : "soft wide";
@@ -1723,7 +1720,7 @@ function renderRegions() {
         season,
       });
     });
-    card.append(head, ...(kindKey ? [kind] : []), text, coords, look, button);
+    card.append(head, text, button);
     host.append(card);
   }
 }
@@ -1855,6 +1852,12 @@ document.querySelector("#compare-images")?.addEventListener("click", () => {
   box.hidden = false;
   fillCompare();
   box.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+document.querySelector("#help-open")?.addEventListener("click", () => {
+  document.querySelector("#help")?.showModal();
+});
+document.querySelector("#help-close")?.addEventListener("click", () => {
+  document.querySelector("#help")?.close();
 });
 document.querySelector("#csv")?.addEventListener("click", () => {
   const rows = selectedSource ? [selectedSource] : listedSources;
@@ -2004,8 +2007,11 @@ window.addEventListener("keydown", (event) => {
 });
 
 apply();
+renderRegions();
 onChange(() => {
   apply();
+  const themeLabel = document.querySelector("#theme-label");
+  if (themeLabel) themeLabel.textContent = t(document.documentElement.dataset.theme === "dark" ? "themeDark" : "themeLight");
   renderRegions();
   if (regionList.length) renderCatalog();
   if (playButton) playButton.textContent = mode === "blink" && !blinkPaused ? t("pause") : timer ? t("pause") : t("play");
