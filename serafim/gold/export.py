@@ -1,6 +1,6 @@
 """Write a gold folder following serafim/contract.py.
 
-Used by the simulated gold now (task D1) and by the real pipeline later (task D7),
+Used by the simulated gold now (task D2) and by the real pipeline later (task D8),
 so both always write exactly the same files with exactly the same types.
 """
 
@@ -19,12 +19,23 @@ import pyarrow.parquet as pq
 from serafim import contract
 
 
-def build_meta(n_frames: int, commit: str | None = None) -> dict:
-    """meta.json content: when the run happened, from which commit and how many frames."""
+def build_meta(frames: pd.DataFrame, collections: list[str], commit: str | None = None) -> dict:
+    """meta.json content, taken from the frames table so it always agrees with it.
+
+    Args:
+        frames: the frames.parquet table (needs `date_utc`); it cannot be empty.
+        collections: the SIA collections that were searched (`settings.collections`).
+        commit: git SHA; by default the current one.
+    """
+    if frames.empty:
+        raise ValueError("Cannot build meta.json: frames is empty")
+    last_frame = frames.date_utc.max().to_pydatetime()
     return {
         "run_date_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "commit": commit or current_commit(),
-        "n_frames": int(n_frames),
+        "collections": list(collections),
+        "last_frame_date_utc": last_frame.isoformat(timespec="seconds"),
+        "n_frames": len(frames),
     }
 
 
@@ -49,9 +60,10 @@ def to_contract_table(data: pd.DataFrame | pa.Table, schema: pa.Schema) -> pa.Ta
 
 
 def write_gold(gold_dir: Path, tables: dict[str, pd.DataFrame | pa.Table], meta: dict) -> None:
-    """Write the 4 Parquet tables, objects.csv and meta.json into gold_dir.
+    """Write the 7 Parquet tables and meta.json into gold_dir.
 
     `tables` is keyed by file name, as in contract.GOLD_TABLES ("frames.parquet", ...).
+    A table with no rows is fine (write it empty with its schema so the site does not fail).
     PNG files are written by whoever makes them; this only writes the tables.
     """
     gold_dir = Path(gold_dir)
@@ -59,8 +71,6 @@ def write_gold(gold_dir: Path, tables: dict[str, pd.DataFrame | pa.Table], meta:
     for filename, schema in contract.GOLD_TABLES.items():
         table = to_contract_table(tables[filename], schema)
         pq.write_table(table, gold_dir / filename)
-        if filename == "objects.parquet":
-            table.to_pandas().to_csv(gold_dir / "objects.csv", index=False)
     with open(gold_dir / "meta.json", "w", encoding="utf-8") as file:
         json.dump(meta, file, indent=2)
         file.write("\n")
