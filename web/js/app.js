@@ -1,36 +1,26 @@
 import { detections, frames, meta, objects, regions } from "./data.js";
+import { apply, onChange, t } from "./i18n.js";
 
 const ARCSEC_PER_PIXEL = 6.15;
 const SVG = "http://www.w3.org/2000/svg";
 const STATUS = {
-  Known: { label: "Objeto conocido", tag: "green" },
-  "Unidentified candidate": { label: "Candidato sin identificar", tag: "amber" },
-  Discarded: { label: "Descartado", tag: "" },
+  Known: { key: "statusKnown", tag: "green" },
+  "Unidentified candidate": { key: "statusCandidate", tag: "amber" },
+  Discarded: { key: "statusDiscarded", tag: "" },
 };
 const TYPE = {
-  asteroid: "Asteroide",
-  "variable star": "Estrella variable",
-  artifact: "Artefacto",
-  unknown: "Sin clasificar",
+  asteroid: "typeAsteroid",
+  "variable star": "typeVariable",
+  artifact: "typeArtifact",
+  unknown: "typeUnknown",
 };
 const REASON = {
-  "Within 2 px of a SkyBoT object on that date": "Coincide con un objeto de SkyBoT en esa fecha.",
-  "Within 2 px of a SIMBAD variable star (V*)": "Coincide con una estrella variable de SIMBAD.",
-  "No match in SkyBoT, SIMBAD or Gaia": "Sin coincidencia en SkyBoT, SIMBAD o Gaia.",
-  "Touches flagged pixels or the edge": "Toca píxeles marcados o el borde del recorte.",
-  "Seen in a single exposure": "Aparece en una sola exposición.",
+  "Within 2 px of a SkyBoT object on that date": "reasonSkybot",
+  "Within 2 px of a SIMBAD variable star (V*)": "reasonSimbad",
+  "No match in SkyBoT, SIMBAD or Gaia": "reasonNone",
+  "Touches flagged pixels or the edge": "reasonEdge",
+  "Seen in a single exposure": "reasonSingle",
 };
-const TITLE = {
-  pole: "Polo Norte Eclíptico",
-  asteroid: "Región asteroide",
-  variable_star: "Región estrella variable",
-};
-const BLURB = {
-  pole: "Zona de monitoreo constante de cielo profundo. Ideal para detectar cambios a largo plazo.",
-  asteroid: "Búsqueda de cuerpos menores en movimiento. Pensada para asteroides que cruzan el campo.",
-  variable_star: "Detección de fluctuaciones de brillo, novas y estrellas pulsantes.",
-};
-const ICON = { pole: "🌌", asteroid: "☄️", variable_star: "⭐" };
 const SKY = {
   pole: ["ngc-stars.jpg", "ngc-dust.jpg", "cygnus.jpg"],
   asteroid: ["cygnus.jpg", "vela.jpg", "ice.jpg"],
@@ -39,14 +29,19 @@ const SKY = {
 const CARD = { pole: "ngc-stars.jpg", asteroid: "cygnus.jpg", variable_star: "ice.jpg" };
 const FRAME_PX = 293;
 const TARGETS = [
-  { id: "barnard", name: "Barnard's Star", icon: "✨", ra: 269.452077, dec: 4.693365, blurb: "Estrella cercana de gran movimiento propio visible a través de épocas. Ideal para medir desplazamientos temporales rápidos." },
-  { id: "eps_indi_b", name: "Epsilon Indi B", icon: "🪐", ra: 331.0441466, dec: -56.7828442, blurb: "Sistema binario de enanas marrones frías. Excelente objetivo para comparar firmas espectrales y cinemática local." },
-  { id: "wise_0855", name: "WISE 0855", icon: "❄️", ra: 133.8189082, dec: -7.247048, blurb: "Objeto frío subestelar y enana marrón de tipo Y. Detectable casi exclusivamente en observaciones infrarrojas profundas." },
-  { id: "rw_aur", name: "RW Aurigae", icon: "☄️", ra: 76.956526, dec: 30.4014382, blurb: "Sistema estelar binario joven con disco circunestelar perturbado, mostrando oscurecimientos periódicos y eventos dinámicos." },
-  { id: "r_dra", name: "R Draconis", icon: "⭐", ra: 248.1676108, dec: 66.7549794, blurb: "Estrella variable pulsante de largo período tipo Mira con marcadas oscilaciones de magnitud óptica e infrarroja." },
+  { id: "barnard", code: "BA", name: "Barnard's Star", ra: 269.452077, dec: 4.693365 },
+  { id: "eps_indi_b", code: "EI", name: "Epsilon Indi B", ra: 331.0441466, dec: -56.7828442 },
+  { id: "wise_0855", code: "W8", name: "WISE 0855", ra: 133.8189082, dec: -7.247048 },
+  { id: "rw_aur", code: "RW", name: "RW Aurigae", ra: 76.956526, dec: 30.4014382 },
+  { id: "r_dra", code: "RD", name: "R Draconis", ra: 248.1676108, dec: 66.7549794 },
 ];
 let activeTarget = "barnard";
-const format = new Intl.NumberFormat("es");
+function formatNumber(value) {
+  return new Intl.NumberFormat(langCode()).format(value);
+}
+function langCode() {
+  return document.documentElement.lang === "es" ? "es" : "en";
+}
 
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
@@ -89,7 +84,7 @@ function stamp(value) {
 function fecha(value) {
   const date = new Date(stamp(value));
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("es", {
+  return new Intl.DateTimeFormat(langCode(), {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -133,7 +128,7 @@ function regionName(id) {
 }
 
 function titleOf(id) {
-  return TITLE[id] || regionName(id);
+  return TARGETS.find((item) => item.id === id)?.name || regionName(id);
 }
 
 function targetOf() {
@@ -181,31 +176,34 @@ function fillEpochs() {
   if (!frame || !baseline) return;
   const now = tally(frame);
   const base = tally(baseline);
-  document.querySelector("#stat-known").textContent = format.format(now.known);
-  document.querySelector("#stat-candidate").textContent = format.format(now.candidate);
-  document.querySelector("#stat-discarded").textContent = format.format(now.discarded);
-  document.querySelector("#stat-frames").textContent = format.format(sequence.length);
-  document.querySelector("#base-known").textContent = format.format(base.known);
-  document.querySelector("#base-candidate").textContent = format.format(base.candidate);
-  document.querySelector("#base-discarded").textContent = format.format(base.discarded);
+  document.querySelector("#stat-known").textContent = formatNumber(now.known);
+  document.querySelector("#stat-candidate").textContent = formatNumber(now.candidate);
+  document.querySelector("#stat-discarded").textContent = formatNumber(now.discarded);
+  document.querySelector("#stat-frames").textContent = formatNumber(sequence.length);
+  document.querySelector("#base-known").textContent = formatNumber(base.known);
+  document.querySelector("#base-candidate").textContent = formatNumber(base.candidate);
+  document.querySelector("#base-discarded").textContent = formatNumber(base.discarded);
   document.querySelector("#base-frames").textContent = "1";
   document.querySelector("#epoch-now").textContent = fecha(frame.date_utc);
   document.querySelector("#epoch-then").textContent = fecha(baseline.date_utc);
   const delta = now.candidate - base.candidate;
-  document.querySelector("#delta-candidates").textContent =
-    `${delta >= 0 ? "+" : ""}${delta} candidatos entre las dos fechas`;
-  document.querySelector("#delta-span").textContent = `Intervalo temporal: ${intervalo(baseline, frame)}`;
-  document.querySelector("#updated").textContent =
-    `Diferencia: ${intervalo(baseline, frame)} · ${targetOf().name}`;
+  const signed = `${delta >= 0 ? "+" : ""}${delta}`;
+  document.querySelector("#delta-candidates").textContent = t("candidatesDelta", { value: signed });
+  document.querySelector("#delta-span").textContent = t("timeSpan", { value: intervalo(baseline, frame) });
+  document.querySelector("#updated").textContent = t("differenceLine", {
+    value: intervalo(baseline, frame),
+    name: targetOf().name,
+  });
 }
 
 function statusOf(object) {
-  return STATUS[object?.status] || { label: object?.status || "—", tag: "" };
+  const info = STATUS[object?.status];
+  return info ? { label: t(info.key), tag: info.tag } : { label: object?.status || "—", tag: "" };
 }
 
 function reasonOf(object) {
   if (!object?.reason) return "";
-  return REASON[object.reason] || object.reason;
+  return REASON[object.reason] ? t(REASON[object.reason]) : object.reason;
 }
 
 function setTag(node, text, kind) {
@@ -248,10 +246,10 @@ function kindFor(object) {
 function place(hit) {
   const width = FRAME_PX;
   const height = FRAME_PX;
-  const col = hit.x_px < width / 3 ? "izquierda" : hit.x_px > (2 * width) / 3 ? "derecha" : "central";
-  const row = hit.y_px < height / 3 ? "superior" : hit.y_px > (2 * height) / 3 ? "inferior" : "central";
-  if (col === "central" && row === "central") return "Centro";
-  return `${row} ${col}`;
+  const col = hit.x_px < width / 3 ? t("left") : hit.x_px > (2 * width) / 3 ? t("right") : t("central");
+  const row = hit.y_px < height / 3 ? t("upper") : hit.y_px > (2 * height) / 3 ? t("lower") : t("central");
+  if (col === t("central") && row === t("central")) return t("center");
+  return t("place", { row, col });
 }
 
 function detectionOn(objectId, frameId) {
@@ -271,8 +269,8 @@ function intervalo(fromFrame, toFrame) {
   const ms = Math.abs(new Date(stamp(toFrame.date_utc)) - new Date(stamp(fromFrame.date_utc)));
   if (!Number.isFinite(ms)) return "—";
   const hours = ms / 36e5;
-  if (hours < 48) return `${Math.max(1, Math.round(hours))} h`;
-  return `${Math.round(hours / 24)} días`;
+  if (hours < 48) return t("hours", { n: Math.max(1, Math.round(hours)) });
+  return t("days", { n: Math.round(hours / 24) });
 }
 
 function draw(frame) {
@@ -308,13 +306,13 @@ function fillPanel() {
   document.querySelector("#panel-now").textContent = frame ? fecha(frame.date_utc) : "—";
   document.querySelector("#panel-then").textContent = baseline ? fecha(baseline.date_utc) : "—";
   document.querySelector("#panel-span").textContent =
-    frame && baseline ? `Intervalo: ${intervalo(baseline, frame)}` : "Intervalo: —";
+    frame && baseline ? t("interval", { value: intervalo(baseline, frame) }) : t("intervalEmpty");
   if (!object) {
-    setTag(status, "Selecciona un marcador", "amber");
-    document.querySelector("#panel-name").textContent = "Ningún objeto elegido";
+    setTag(status, t("selectMarker"), "amber");
+    document.querySelector("#panel-name").textContent = t("noneChosen");
     document.querySelector("#panel-type").textContent = "—";
     prob.hidden = true;
-    document.querySelector("#panel-notes").replaceChildren("Los detalles aparecen al elegir un marcador del visor.");
+    document.querySelector("#panel-notes").replaceChildren(t("detailsIdle"));
     document.querySelector("#panel-move").textContent = "—";
     document.querySelector("#move-read").textContent = "—";
     document.querySelector("#panel-place").textContent = "—";
@@ -324,7 +322,7 @@ function fillPanel() {
   const info = statusOf(object);
   setTag(status, info.label, info.tag);
   document.querySelector("#panel-name").textContent = object.name;
-  document.querySelector("#panel-type").textContent = TYPE[object.type] || object.type || "—";
+  document.querySelector("#panel-type").textContent = TYPE[object.type] ? t(TYPE[object.type]) : object.type || "—";
   if (typeof object.p_real === "number") {
     prob.hidden = false;
     prob.textContent = `${(object.p_real * 100).toFixed(1)}% p_real`;
@@ -334,10 +332,8 @@ function fillPanel() {
   const notes = document.querySelector("#panel-notes");
   notes.replaceChildren();
   const lines = [reasonOf(object)];
-  if (object.catalog) lines.push(`Catálogo: ${object.catalog}.`);
-  if (object.status === "Unidentified candidate") {
-    lines.push("Sigue siendo un candidato: no se llama objeto nuevo.");
-  }
+  if (object.catalog) lines.push(t("catalogLine", { name: object.catalog }));
+  if (object.status === "Unidentified candidate") lines.push(t("stillCandidate"));
   for (const line of lines.filter(Boolean)) {
     const span = document.createElement("span");
     span.textContent = line;
@@ -347,9 +343,9 @@ function fillPanel() {
   const moveText = shift == null ? "—" : `${shift.toFixed(1)}″`;
   document.querySelector("#panel-move").textContent = moveText;
   document.querySelector("#move-read").textContent = moveText;
-  document.querySelector("#delta-move").textContent = shift == null ? "Sin desplazamiento medido" : `${shift.toFixed(1)}″ de desplazamiento`;
+  document.querySelector("#delta-move").textContent = shift == null ? t("noShift") : t("shiftOf", { value: shift.toFixed(1) });
   const hit = frame ? detectionOn(object.object_id, frame.frame_id) : null;
-  const where = hit ? place(hit) : "Fuera de esta foto";
+  const where = hit ? place(hit) : t("offFrame");
   document.querySelector("#panel-place").textContent = where;
   document.querySelector("#place-read").textContent = where;
 }
@@ -365,8 +361,8 @@ function fillCompare() {
   const leftIndex = left === frame ? index + (diffBox.checked ? 1 : 0) : 0;
   now.src = skyFor(left, leftIndex);
   then.src = skyFor(baseline, 0);
-  document.querySelector("#cmp-now-label").textContent = `Fotografía ${showingNow ? "actual" : "base"} (${fecha(left.date_utc)})`;
-  document.querySelector("#cmp-then-label").textContent = `Fotografía comparativa (${fecha(baseline.date_utc)})`;
+  document.querySelector("#cmp-now-label").textContent = t(showingNow ? "photoCurrent" : "photoBlink", { date: fecha(left.date_utc) });
+  document.querySelector("#cmp-then-label").textContent = t("photoBase", { date: fecha(baseline.date_utc) });
 
   const recentIds = new Set(hits.filter((hit) => hit.frame_id === frame.frame_id).map((hit) => hit.object_id));
   const baseIds = new Set(hits.filter((hit) => hit.frame_id === baseline.frame_id).map((hit) => hit.object_id));
@@ -377,25 +373,23 @@ function fillCompare() {
   const candidates = newcomers.filter((object) => object.status === "Unidentified candidate");
   const named = (candidates.length ? candidates : newcomers).map((object) => object.name);
   document.querySelector("#event-new").textContent = named.length
-    ? `${named.join(", ")} ${named.length === 1 ? "aparece" : "aparecen"} en la exposición del visor y no en la base.`
-    : "Ningún objeto de la exposición actual falta en la fotografía base.";
-  document.querySelector("#event-new-foot").textContent = named.length ? "Visto en la foto reciente" : "Sin alta nueva";
+    ? t("newcomers", { names: named.join(", ") })
+    : t("noNewcomers");
+  document.querySelector("#event-new-foot").textContent = named.length ? t("seenRecent") : t("noNew");
 
   const shifts = [...byObject.values()]
     .map((object) => ({ object, arcsec: movement(object, baseline, frame) }))
     .filter((item) => item.arcsec != null);
   const biggest = shifts.sort((a, b) => b.arcsec - a.arcsec)[0];
   document.querySelector("#event-move").textContent = biggest
-    ? `${biggest.object.name}: ${biggest.arcsec.toFixed(1)} segundos de arco entre la base y esta fecha.`
-    : "Ningún objeto repetido tiene las dos posiciones medidas.";
-  document.querySelector("#event-move-foot").textContent = biggest && biggest.arcsec >= 1 ? "Desplazamiento medido" : "Sin desplazamiento claro";
+    ? t("motionLine", { name: biggest.object.name, value: biggest.arcsec.toFixed(1) })
+    : t("noRepeat");
+  document.querySelector("#event-move-foot").textContent = biggest && biggest.arcsec >= 1 ? t("shiftMeasured") : t("noClearShift");
 
-  document.querySelector("#event-diff").textContent = frame.png_diff
-    ? "La diferencia medida sigue en las tablas. En pantalla, la casilla cambia a otra imagen de referencia de SPHEREx."
-    : "Esta exposición no tiene imagen diferencia en las tablas.";
-  document.querySelector("#event-diff-foot").textContent = frame.png_diff ? "Disponible" : "No publicada";
+  document.querySelector("#event-diff").textContent = frame.png_diff ? t("diffOn") : t("diffOff");
+  document.querySelector("#event-diff-foot").textContent = frame.png_diff ? t("availableShort") : t("unpublished");
   const findings = [named.length > 0, Boolean(biggest && biggest.arcsec >= 1), Boolean(frame.png_diff)].filter(Boolean).length;
-  document.querySelector("#cmp-count").textContent = `${findings} hallazgo${findings === 1 ? "" : "s"} entre las dos fechas`;
+  document.querySelector("#cmp-count").textContent = t(findings === 1 ? "finding" : "findings", { n: findings });
 }
 
 async function render() {
@@ -403,7 +397,7 @@ async function render() {
   if (!frame) return;
   const picture = await loadImage(skyFor(frame, index + (diffBox.checked ? 1 : 0)));
   image.src = picture.src;
-  image.alt = `Imagen de referencia SPHEREx, ${titleOf(frame.region_id)}`;
+  image.alt = t("frameAltDyn", { name: titleOf(frame.region_id) });
   draw(frame);
   caption.textContent = `${stamp(frame.date_utc)} · ${frame.wavelength_um} µm · ${index + 1} / ${sequence.length}`;
   slider.value = String(index);
@@ -430,7 +424,7 @@ function move(step) {
 function setPlaying(playing) {
   clearInterval(timer);
   timer = 0;
-  playButton.textContent = playing ? "Pausa" : "Reproducir";
+  playButton.textContent = playing ? t("pause") : t("play");
   if (playing) timer = setInterval(() => move(1), 900);
 }
 
@@ -444,8 +438,7 @@ function sample(list, count) {
 
 function updateGifLabel() {
   const seconds = ((gifFrames.length || gifCount) * gifMs) / 1000;
-  document.querySelector("#gif-duration").textContent =
-    `Duración calculada: ${seconds.toFixed(1)} segundos (bucle)`;
+  document.querySelector("#gif-duration").textContent = t("duration", { seconds: seconds.toFixed(1) });
 }
 
 function restartPreview() {
@@ -455,7 +448,7 @@ function restartPreview() {
   gifBlob = null;
   document.querySelector("#gif-save").disabled = true;
   const available = document.querySelector("#gif-available");
-  if (available) available.textContent = `${sequence.length} capturas`;
+  if (available) available.textContent = t("captures", { n: sequence.length });
   updateGifLabel();
   const preview = document.querySelector("#gif-preview");
   const show = () => {
@@ -471,7 +464,7 @@ async function makeGif() {
   const note = document.querySelector("#gif-note");
   const button = document.querySelector("#gif-make");
   button.disabled = true;
-  note.textContent = "Generando el GIF…";
+  note.textContent = t("makingGif");
   try {
     const { GIFEncoder, quantize, applyPalette } = await import(
       "https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm"
@@ -492,9 +485,9 @@ async function makeGif() {
     encoder.finish();
     gifBlob = new Blob([encoder.bytes()], { type: "image/gif" });
     document.querySelector("#gif-save").disabled = false;
-    note.textContent = "GIF listo para descargar.";
+    note.textContent = t("gifReady");
   } catch (error) {
-    note.textContent = "No se pudo generar el GIF.";
+    note.textContent = t("gifFail");
     console.error(error);
   } finally {
     button.disabled = false;
@@ -521,23 +514,26 @@ function renderRegions() {
     if (active) {
       const flag = document.createElement("span");
       flag.className = "flag";
-      flag.textContent = "Región activa";
+      flag.textContent = t("activeFlag");
       card.append(flag);
     }
     const head = document.createElement("div");
     head.className = "card-title";
     const title = document.createElement("h3");
-    title.textContent = `${target.icon} ${target.name}`;
+    const code = document.createElement("span");
+    code.className = "code";
+    code.textContent = target.code;
+    title.append(code, document.createTextNode(target.name));
     const badge = document.createElement("span");
     badge.className = active ? "tag amber" : "tag";
-    badge.textContent = active ? "En foco" : "Disponible";
+    badge.textContent = active ? t("inFocus") : t("available");
     head.append(title, badge);
     const text = document.createElement("p");
-    text.textContent = target.blurb;
+    text.textContent = t(`blurb_${target.id}`);
     const button = document.createElement("button");
     button.type = "button";
     button.className = active ? "amber wide" : "soft wide";
-    button.textContent = active ? "Región en visualización" : "Cargar esta región";
+    button.textContent = active ? t("viewing") : t("loadTarget");
     button.addEventListener("click", () => {
       activeTarget = target.id;
       const region = goldFor(target.id);
@@ -552,8 +548,10 @@ function renderCatalog() {
   const body = document.querySelector("#rows");
   body.replaceChildren();
   const names = new Map(regionList.map((region) => [region.region_id, region.name]));
-  document.querySelector("#catalog-status").textContent =
-    `${catalog.length} objetos en ${regionList.length} regiones.`;
+  document.querySelector("#catalog-status").textContent = t("catalogCount", {
+    objects: catalog.length,
+    regions: regionList.length,
+  });
   for (const row of catalog) {
     const info = statusOf(row);
     const tr = document.createElement("tr");
@@ -581,7 +579,7 @@ function renderCatalog() {
     const link = document.createElement("button");
     link.type = "button";
     link.className = "ghost";
-    link.textContent = "Ver en visor";
+    link.textContent = t("viewInViewer");
     link.addEventListener("click", () => focusObject(row));
     action.append(link);
     tr.append(name, state, where, when, action);
@@ -648,7 +646,7 @@ discardedBox.addEventListener("change", () => render());
 document.querySelector("#blink").addEventListener("click", () => {
   blinkOn = !blinkOn;
   const button = document.querySelector("#blink");
-  button.textContent = blinkOn ? "Pausar blink" : "Alternar / blink";
+  button.textContent = blinkOn ? t("blinkPause") : t("blink");
   clearInterval(blinkTimer);
   if (blinkOn) {
     blinkTimer = setInterval(() => {
@@ -694,11 +692,11 @@ document.querySelector("#analyze").addEventListener("click", () => {
   const object = byObject.get(selectedId);
   const out = document.querySelector("#cnn-out");
   if (!object) {
-    out.textContent = "Elige un marcador del visor para analizarlo.";
+    out.textContent = t("pickMarker");
     return;
   }
   const score = Number(object.p_real);
-  const scored = Number.isFinite(score) ? ` p_real ${(score * 100).toFixed(1)}%.` : " Sin puntuación CNN todavía.";
+  const scored = Number.isFinite(score) ? t("score", { value: (score * 100).toFixed(1) }) : t("noScore");
   out.textContent = `${object.name}: ${statusOf(object).label}.${scored} ${reasonOf(object)}`;
 });
 document.querySelector("#help-open").addEventListener("click", () => document.querySelector("#help").showModal());
@@ -716,6 +714,21 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key === " ") {
     event.preventDefault();
     setPlaying(!timer);
+  }
+});
+
+apply();
+onChange(() => {
+  apply();
+  renderRegions();
+  if (regionList.length) renderCatalog();
+  playButton.textContent = timer ? t("pause") : t("play");
+  document.querySelector("#blink").textContent = blinkOn ? t("blinkPause") : t("blink");
+  if (sequence.length) {
+    updateGifLabel();
+    const available = document.querySelector("#gif-available");
+    if (available) available.textContent = t("captures", { n: sequence.length });
+    render();
   }
 });
 
@@ -740,6 +753,6 @@ try {
     if (target) target.scrollIntoView();
   }
 } catch (error) {
-  document.querySelector("#updated").textContent = "Las tablas publicadas no están disponibles.";
+  document.querySelector("#updated").textContent = t("tablesDown");
   console.error(error);
 }

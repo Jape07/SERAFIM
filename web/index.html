@@ -1,72 +1,78 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SERAFIM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0,0&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <script>
-    if (localStorage.getItem("serafim-theme") === "dark") document.documentElement.dataset.theme = "dark";
+    if (localStorage.getItem("serafim-console") === "light") document.documentElement.dataset.theme = "light";
   </script>
 </head>
 <body>
   <header class="top">
     <div class="top-inner">
       <a class="brand" href="index.html">
-        <span class="logo" aria-hidden="true"><span class="material-symbols-outlined">auto_awesome</span></span>
+        <span class="logo" aria-hidden="true"><span class="material-symbols-outlined">blur_on</span></span>
         <span>
           <span class="brand-name">SERAFIM <span class="badge-mini">SPHEREx</span></span>
-          <small>Inspirado en NASA SPHEREx</small>
+          <small data-i18n="brandSub">NASA SPHEREx time-domain viewer</small>
         </span>
       </a>
-      <nav class="nav" aria-label="Secciones">
-        <a href="#visor">Explorar</a>
-        <a href="#comparador">Comparar</a>
-        <a href="#comparador">Detectar</a>
-        <a href="#regiones">Regiones</a>
-        <a href="#creador-gif">Compartir</a>
-        <a href="#catalogo">Catálogo</a>
+      <nav class="nav" data-i18n="navLabel" data-i18n-attr="aria-label" aria-label="Sections">
+        <a href="#visor" data-i18n="navExplore">Explore</a>
+        <a href="#comparador" data-i18n="navCompare">Compare</a>
+        <a href="#comparador" data-i18n="navDetect">Detect</a>
+        <a href="#regiones" data-i18n="navRegions">Targets</a>
+        <a href="#creador-gif" data-i18n="navShare">Share</a>
+        <a href="#catalogo" data-i18n="navCatalog">Catalog</a>
       </nav>
       <div class="tools">
-        <button class="ghost" id="theme" type="button" aria-pressed="false">
-          <span class="material-symbols-outlined" id="theme-icon">light_mode</span>
-          <span id="theme-label">Modo claro</span>
+        <button class="ghost" id="lang" type="button" aria-pressed="false">ES</button>
+        <button class="ghost" id="theme" type="button" aria-pressed="true">
+          <span class="material-symbols-outlined" id="theme-icon">dark_mode</span>
+          <span id="theme-label">DARK</span>
         </button>
-        <button class="ghost" id="help-open" type="button"><span class="material-symbols-outlined">help</span> Ayuda rápida</button>
+        <button class="ghost" id="help-open" type="button"><span class="material-symbols-outlined">help</span> <span data-i18n="helpOpen">Quick help</span></button>
       </div>
     </div>
   </header>
 
   <main class="page">
     <section class="hero">
-      <div class="pill"><span class="dot"></span> Plataforma abierta de observación temporal astronómica</div>
-      <h1>Explora cómo cambia el cielo</h1>
-      <p>Descubre asteroides, nuevas estrellas y cambios en el universo comparando imágenes tomadas en distintas fechas.</p>
+      <div class="pill"><span class="dot"></span> <span data-i18n="heroPill">Open time-domain observatory</span></div>
+      <h1 data-i18n="heroTitle">Watch the infrared sky change</h1>
+      <p data-i18n="heroLead">Step through SPHEREx exposures of one field and compare what moved, brightened, or appeared.</p>
     </section>
 
     <section id="regiones">
-      <p class="kicker">Navegación guiada</p>
-      <h2>Regiones de exploración</h2>
-      <p class="intro">Selecciona el tipo de cielo o región astronómica que deseas inspeccionar:</p>
-      <div class="region-grid" id="region-cards" style="margin-top: 1rem"></div>
+      <p class="kicker" data-i18n="regionsKicker">Target select</p>
+      <h2 data-i18n="regionsTitle">Observation targets</h2>
+      <p class="intro" data-i18n="regionsLead">Load one of the five challenge fields. Coordinates are ICRS.</p>
+      <div class="region-grid" id="region-cards"></div>
     </section>
 
     <section id="visor">
-      <p class="kicker">Explorador interactivo</p>
-      <h2>Visor principal del cielo</h2>
-      <div class="split" style="margin-top: 1rem">
+      <p class="kicker" data-i18n="viewerKicker">Interactive viewer</p>
+      <h2 data-i18n="viewerTitle">Primary sky viewer</h2>
+      <div class="split">
         <div class="sky">
           <div class="sky-grid"></div>
-          <div class="sky-glow"></div>
-          <img id="frame" alt="Campo de observación SPHEREx">
+          <img id="frame" data-i18n="frameAlt" data-i18n-attr="alt" alt="SPHEREx field">
           <svg id="marks" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div class="reticle" aria-hidden="true"></div>
+          <div class="scan" aria-hidden="true"></div>
           <div class="float tl">
-            <span class="tiny">Campo de observación temporal NASA SPHEREx</span>
-            <strong id="sector">Cargando…</strong>
+            <span class="tiny" data-i18n="fieldLabel">NASA SPHEREx temporal field</span>
+            <strong id="sector" data-i18n="loading">Acquiring…</strong>
+          </div>
+          <div class="float tr">
+            <span data-i18n="telemetry">TELEMETRY: LOCKED</span>
+            <span data-i18n="bands">WAVELENGTH: 102-BAND</span>
           </div>
           <div class="float bl">
             <span>RA: <strong id="sky-ra">—</strong></span>
@@ -75,12 +81,12 @@
         </div>
         <aside class="panel">
           <div>
-            <h3 class="block-title"><span class="material-symbols-outlined">psychology</span> Análisis CNN de región</h3>
-            <div class="row" style="margin-top: 0.7rem">
-              <button class="primary" id="analyze" type="button"><span class="material-symbols-outlined">auto_awesome</span> Analizar selección</button>
-              <a class="ghost" id="csv" href="gold/objects.csv"><span class="material-symbols-outlined">download</span> CSV</a>
+            <h3 class="block-title"><span class="material-symbols-outlined">psychology</span> <span data-i18n="cnnTitle">Selection readout</span></h3>
+            <div class="row">
+              <button class="primary" id="analyze" type="button"><span class="material-symbols-outlined">query_stats</span> <span data-i18n="analyze">Read selection</span></button>
+              <a class="ghost" id="csv" href="gold/objects.csv"><span class="material-symbols-outlined">download</span> <span data-i18n="csv">CSV</span></a>
             </div>
-            <p class="cnn-out" id="cnn-out">Elige un marcador del visor y analiza la selección.</p>
+            <p class="cnn-out" id="cnn-out" data-i18n="cnnIdle">Select a marker, then read the selection.</p>
             <p class="note" id="panel-status" hidden></p>
             <p class="note" id="panel-name" hidden></p>
             <p class="note" id="panel-prob" hidden></p>
@@ -94,28 +100,28 @@
           </div>
           <div>
             <div class="head-row">
-              <h3 class="block-title"><span class="material-symbols-outlined">schedule</span> Comparación temporal</h3>
-              <span class="tag indigo" id="panel-span">Intervalo: —</span>
+              <h3 class="block-title"><span class="material-symbols-outlined">schedule</span> <span data-i18n="timeTitle">Time comparison</span></h3>
+              <span class="tag indigo" id="panel-span" data-i18n="intervalEmpty">Span: —</span>
             </div>
-            <div class="dates" style="margin-top: 0.7rem">
-              <div class="mini"><span>Comparativa</span><strong id="panel-then">—</strong></div>
-              <div class="mini"><span>Reciente</span><strong id="panel-now">—</strong></div>
+            <div class="dates">
+              <div class="mini"><span data-i18n="thenLabel">Baseline</span><strong id="panel-then">—</strong></div>
+              <div class="mini"><span data-i18n="nowLabel">Current</span><strong id="panel-now">—</strong></div>
             </div>
-            <label class="label" for="slider" style="display:block;margin-top:0.8rem">Línea de tiempo</label>
-            <input class="slider" id="slider" type="range" min="0" max="0" value="0">
+            <label class="label" for="slider" data-i18n="timeline">Timeline</label>
+            <input class="slider" id="slider" type="range" min="0" max="0" value="0" aria-valuemin="0">
             <p class="hint" id="caption"></p>
             <div class="deltas">
-              <div class="mini"><span>Movimiento</span><strong id="move-read">—</strong></div>
-              <div class="mini"><span>Longitud</span><strong id="wave-read">—</strong></div>
-              <div class="mini"><span>Posición</span><strong id="place-read">—</strong></div>
+              <div class="mini"><span data-i18n="motion">Motion</span><strong id="move-read">—</strong></div>
+              <div class="mini"><span data-i18n="wavelength">Wavelength</span><strong id="wave-read">—</strong></div>
+              <div class="mini"><span data-i18n="position">Position</span><strong id="place-read">—</strong></div>
             </div>
-            <div class="row" style="margin-top: 0.8rem">
-              <button class="primary" id="play" type="button">Reproducir</button>
-              <a class="ghost" href="#comparador"><span class="material-symbols-outlined">compare_arrows</span> Comparar</a>
+            <div class="row">
+              <button class="primary" id="play" type="button" data-i18n="play">Play</button>
+              <a class="ghost" href="#comparador"><span class="material-symbols-outlined">compare_arrows</span> <span data-i18n="compare">Compare</span></a>
             </div>
             <div class="checks">
-              <label><input id="diff" type="checkbox"> Diferencia</label>
-              <label><input id="discarded" type="checkbox" checked> Descartados</label>
+              <label><input id="diff" type="checkbox"> <span data-i18n="difference">Difference</span></label>
+              <label><input id="discarded" type="checkbox" checked> <span data-i18n="discarded">Discarded</span></label>
             </div>
           </div>
         </aside>
@@ -125,37 +131,37 @@
     <section id="resumen">
       <div class="head-row">
         <div>
-          <p class="kicker">Balance diferencial de épocas</p>
-          <h2>Resumen comparativo de observaciones</h2>
+          <p class="kicker" data-i18n="summaryKicker">Epoch balance</p>
+          <h2 data-i18n="summaryTitle">Observation summary</h2>
         </div>
-        <span class="tag indigo" id="updated">Sincronizando tablas…</span>
+        <span class="tag indigo" id="updated" data-i18n="syncing">Syncing tables…</span>
       </div>
       <article class="epoch">
         <div class="epoch-head">
-          <h3>Fecha reciente: <span id="epoch-now">—</span> <span class="tag amber">Temporada reciente</span></h3>
-          <span class="note">Época t₂</span>
+          <h3><span data-i18n="recentPrefix">Current epoch:</span> <span id="epoch-now">—</span> <span class="tag amber" data-i18n="recentTag">Current season</span></h3>
+          <span class="note" data-i18n="epochNow">Epoch t2</span>
         </div>
         <div class="stat-grid">
-          <div class="mini stat"><span>Objetos conocidos</span><div class="num" id="stat-known">—</div><p>Identificados en esta exposición.</p></div>
-          <div class="mini stat warm"><span>Candidatos sin identificar</span><div class="num amber" id="stat-candidate">—</div><p>Siguen siendo candidatos, no objetos nuevos.</p></div>
-          <div class="mini stat"><span>Objetos descartados</span><div class="num" id="stat-discarded">—</div><p>Ruido, bordes y artefactos.</p></div>
-          <div class="mini stat"><span>Imágenes analizadas</span><div class="num indigo" id="stat-frames">—</div><p>Exposiciones publicadas de la región.</p></div>
+          <div class="mini stat"><span data-i18n="known">Known objects</span><div class="num" id="stat-known">—</div><p data-i18n="knownNow">Identified on this exposure.</p></div>
+          <div class="mini stat warm"><span data-i18n="candidates">Unidentified candidates</span><div class="num amber" id="stat-candidate">—</div><p data-i18n="candidatesNow">Still candidates, not new objects.</p></div>
+          <div class="mini stat"><span data-i18n="discardedObjects">Discarded objects</span><div class="num" id="stat-discarded">—</div><p data-i18n="discardedNow">Noise, edges, and artifacts.</p></div>
+          <div class="mini stat"><span data-i18n="framesAnalyzed">Frames analyzed</span><div class="num indigo" id="stat-frames">—</div><p data-i18n="framesNow">Published exposures of this field.</p></div>
         </div>
       </article>
       <article class="epoch">
         <div class="epoch-head">
-          <h3>Fecha comparativa: <span id="epoch-then">—</span> <span class="tag">Temporada base</span></h3>
-          <span class="note">Época t₁</span>
+          <h3><span data-i18n="baselinePrefix">Baseline epoch:</span> <span id="epoch-then">—</span> <span class="tag" data-i18n="baselineTag">Baseline</span></h3>
+          <span class="note" data-i18n="epochThen">Epoch t1</span>
         </div>
         <div class="stat-grid">
-          <div class="mini stat"><span>Objetos conocidos</span><div class="num" id="base-known">—</div><p>Conteo en la primera exposición.</p></div>
-          <div class="mini stat"><span>Candidatos sin identificar</span><div class="num" id="base-candidate">—</div><p>Candidatos de la época base.</p></div>
-          <div class="mini stat"><span>Objetos descartados</span><div class="num" id="base-discarded">—</div><p>Descartes de la época base.</p></div>
-          <div class="mini stat"><span>Imágenes analizadas</span><div class="num" id="base-frames">—</div><p>La línea de base es una exposición.</p></div>
+          <div class="mini stat"><span data-i18n="known">Known objects</span><div class="num" id="base-known">—</div><p data-i18n="knownBase">Count on the first exposure.</p></div>
+          <div class="mini stat"><span data-i18n="candidates">Unidentified candidates</span><div class="num" id="base-candidate">—</div><p data-i18n="candidatesBase">Candidates on the baseline.</p></div>
+          <div class="mini stat"><span data-i18n="discardedObjects">Discarded objects</span><div class="num" id="base-discarded">—</div><p data-i18n="discardedBase">Discards on the baseline.</p></div>
+          <div class="mini stat"><span data-i18n="framesAnalyzed">Frames analyzed</span><div class="num" id="base-frames">—</div><p data-i18n="framesBase">The baseline is one exposure.</p></div>
         </div>
       </article>
       <div class="changes">
-        <span>Cambios clave entre fechas:</span>
+        <span data-i18n="changes">Changes between epochs:</span>
         <span class="tag green" id="delta-candidates">—</span>
         <span class="tag amber" id="delta-move">—</span>
         <span class="tag" id="delta-span">—</span>
@@ -163,23 +169,23 @@
     </section>
 
     <section id="comparador">
-      <p class="kicker">Herramienta unificada</p>
-      <h2>Comparación temporal y detección de cambios</h2>
-      <p class="intro">Compara dos capturas del mismo sector y revisa lo que cambia entre la base y la fecha del visor.</p>
-      <div class="split" style="margin-top: 1rem">
+      <p class="kicker" data-i18n="compareKicker">Change detection</p>
+      <h2 data-i18n="compareTitle">Temporal comparison</h2>
+      <p class="intro" data-i18n="compareLead">Compare the viewer epoch with the first exposure of the same field.</p>
+      <div class="split">
         <article class="photo">
-          <header><span class="frame-title" id="cmp-now-label">Fotografía actual</span><span class="tag amber">Reciente</span></header>
-          <div class="sky"><div class="sky-grid"></div><div class="sky-glow"></div><img id="cmp-now" alt="Exposición reciente"></div>
+          <header><span class="frame-title" id="cmp-now-label" data-i18n="photoNow">Current exposure</span><span class="tag amber" data-i18n="recent">Current</span></header>
+          <div class="sky"><div class="sky-grid"></div><div class="reticle" aria-hidden="true"></div><img id="cmp-now" data-i18n="currentAlt" data-i18n-attr="alt" alt="Current exposure"></div>
         </article>
         <article class="photo">
-          <header><span class="frame-title" id="cmp-then-label">Fotografía comparativa</span><span class="tag">Base anterior</span></header>
-          <div class="sky"><div class="sky-grid"></div><div class="sky-glow"></div><img id="cmp-then" alt="Exposición de referencia"></div>
+          <header><span class="frame-title" id="cmp-then-label" data-i18n="photoThen">Baseline exposure</span><span class="tag" data-i18n="priorBase">Prior baseline</span></header>
+          <div class="sky"><div class="sky-grid"></div><div class="reticle" aria-hidden="true"></div><img id="cmp-then" data-i18n="baselineAlt" data-i18n-attr="alt" alt="Baseline exposure"></div>
         </article>
       </div>
-      <div class="events" style="margin-top: 0.8rem">
-        <article class="event"><strong id="event-new-title">Candidatos en la fecha reciente</strong><p id="event-new">—</p><p id="event-new-foot"></p></article>
-        <article class="event"><strong>Movimiento observado</strong><p id="event-move">—</p><p id="event-move-foot"></p></article>
-        <article class="event"><strong>Imagen diferencia</strong><p id="event-diff">—</p><p id="event-diff-foot"></p></article>
+      <div class="events">
+        <article class="event"><strong id="event-new-title" data-i18n="eventNewTitle">Candidates on the current date</strong><p id="event-new">—</p><p id="event-new-foot"></p></article>
+        <article class="event"><strong data-i18n="eventMoveTitle">Observed motion</strong><p id="event-move">—</p><p id="event-move-foot"></p></article>
+        <article class="event"><strong data-i18n="eventDiffTitle">Difference image</strong><p id="event-diff">—</p><p id="event-diff-foot"></p></article>
       </div>
       <p class="hint" id="cmp-count"></p>
       <div class="choice" id="blink-speed" hidden>
@@ -187,19 +193,19 @@
         <button type="button" data-ms="600" aria-pressed="true">1×</button>
         <button type="button" data-ms="300">2×</button>
       </div>
-      <button id="blink" type="button" hidden>Alternar / blink</button>
-      <button id="blink-jump" type="button" hidden>Activar blink</button>
+      <button id="blink" type="button" hidden>Blink</button>
+      <button id="blink-jump" type="button" hidden>Arm blink</button>
     </section>
 
     <section id="creador-gif">
-      <p class="kicker">Ciencia ciudadana y difusión</p>
-      <h2>Creador de GIF de movimiento cósmico</h2>
-      <p class="intro">Crea una animación corta para compartir el recorrido de la región que está en el visor.</p>
-      <div class="gif-layout" style="margin-top: 1rem">
+      <p class="kicker" data-i18n="gifKicker">Citizen science</p>
+      <h2 data-i18n="gifTitle">Motion GIF builder</h2>
+      <p class="intro" data-i18n="gifLead">Build a short loop of the field currently loaded in the viewer.</p>
+      <div class="gif-layout">
         <div class="gif-controls">
-          <div class="head-row"><span class="label">Imágenes disponibles</span><strong id="gif-available">—</strong></div>
+          <div class="head-row"><span class="label" data-i18n="framesAvailable">Frames available</span><strong id="gif-available">—</strong></div>
           <div>
-            <div class="label">Cantidad de imágenes</div>
+            <div class="label" data-i18n="frameCount">Frame count</div>
             <div class="choice" id="gif-count">
               <button type="button" data-n="2">2 img</button>
               <button type="button" data-n="4" aria-pressed="true">4 img</button>
@@ -207,27 +213,27 @@
             </div>
           </div>
           <div>
-            <div class="label">Cadencia de reproducción</div>
+            <div class="label" data-i18n="cadence">Playback cadence</div>
             <div class="choice" id="gif-speed">
-              <button type="button" data-ms="800">Lento</button>
+              <button type="button" data-ms="800" data-i18n="slow">Slow</button>
               <button type="button" data-ms="450" aria-pressed="true">0.45 s</button>
-              <button type="button" data-ms="220">Rápido</button>
+              <button type="button" data-ms="220" data-i18n="fast">Fast</button>
             </div>
           </div>
-          <div class="duration" id="gif-duration">Duración calculada: —</div>
-          <button class="amber wide" id="gif-make" type="button"><span class="material-symbols-outlined">play_circle</span> Generar GIF</button>
-          <button class="ghost wide" id="gif-save" type="button" disabled><span class="material-symbols-outlined">download</span> Descargar GIF / compartir hallazgo</button>
+          <div class="duration" id="gif-duration" data-i18n="durationEmpty">Computed duration: —</div>
+          <button class="amber wide" id="gif-make" type="button"><span class="material-symbols-outlined">play_circle</span> <span data-i18n="makeGif">Build GIF</span></button>
+          <button class="ghost wide" id="gif-save" type="button" disabled><span class="material-symbols-outlined">download</span> <span data-i18n="saveGif">Download GIF</span></button>
           <p class="hint" id="gif-note"></p>
         </div>
         <div>
           <div class="sky">
             <div class="sky-grid"></div>
-            <div class="sky-glow"></div>
-            <img id="gif-preview" alt="Vista previa de la animación">
-            <span class="float tl">Vista previa animada</span>
-            <span class="float bl">Repetición automática</span>
+            <div class="reticle" aria-hidden="true"></div>
+            <img id="gif-preview" data-i18n="previewAlt" data-i18n-attr="alt" alt="Animation preview">
+            <span class="float tl" data-i18n="preview">Animated preview</span>
+            <span class="float bl" data-i18n="loop">Loop armed</span>
           </div>
-          <p class="hint">El GIF recorre imágenes de referencia de SPHEREx con la cadencia elegida.</p>
+          <p class="hint" data-i18n="gifHint">The GIF steps through SPHEREx reference frames at the selected cadence.</p>
         </div>
       </div>
     </section>
@@ -235,15 +241,21 @@
     <section id="catalogo">
       <div class="head-row">
         <div>
-          <p class="kicker">Registro general</p>
-          <h2>Catálogo de objetos</h2>
-          <p class="intro" id="catalog-status">Cargando el catálogo…</p>
+          <p class="kicker" data-i18n="catalogKicker">Object registry</p>
+          <h2 data-i18n="catalogTitle">Object catalog</h2>
+          <p class="intro" id="catalog-status" data-i18n="catalogLoading">Loading catalog…</p>
         </div>
       </div>
-      <div class="table-wrap" style="margin-top: 0.8rem">
+      <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Objeto</th><th>Estado</th><th>Región</th><th>Fecha</th><th class="right">Acciones</th></tr>
+            <tr>
+              <th data-i18n="colObject">Object</th>
+              <th data-i18n="colStatus">Status</th>
+              <th data-i18n="colRegion">Field</th>
+              <th data-i18n="colDate">Date</th>
+              <th class="right" data-i18n="colActions">Actions</th>
+            </tr>
           </thead>
           <tbody id="rows"></tbody>
         </table>
@@ -254,46 +266,46 @@
   <footer class="foot">
     <div class="foot-inner">
       <div>
-        <strong>SERAFIM</strong> · Ciencia abierta ciudadana
-        <p>Datos de la misión SPHEREx de NASA, servidos por IRSA en IPAC (Caltech). Las imágenes de fondo son referencia de NASA/JPL-Caltech. Los conteos salen de las tablas publicadas.</p>
+        <strong>SERAFIM</strong> · <span data-i18n="footOrg">Open citizen science</span>
+        <p data-i18n="footNote">SPHEREx data from NASA, served by IRSA at IPAC (Caltech). Background frames are NASA/JPL-Caltech references. Counts come from the published tables.</p>
       </div>
-      <nav aria-label="Pie">
-        <a href="#visor">Explorador</a>
-        <a href="#comparador">Comparador</a>
-        <a href="#regiones">Regiones</a>
-        <a href="#creador-gif">GIF</a>
-        <a href="#catalogo">Catálogo</a>
-        <a href="about.html">Créditos</a>
+      <nav data-i18n="footNav" data-i18n-attr="aria-label" aria-label="Footer">
+        <a href="#visor" data-i18n="footExplorer">Explorer</a>
+        <a href="#comparador" data-i18n="footComparer">Comparer</a>
+        <a href="#regiones" data-i18n="footRegions">Targets</a>
+        <a href="#creador-gif" data-i18n="footGif">GIF</a>
+        <a href="#catalogo" data-i18n="footCatalog">Catalog</a>
+        <a href="about.html" data-i18n="footCredits">Credits</a>
       </nav>
     </div>
   </footer>
 
   <dialog id="help">
-    <h2>Ayuda rápida</h2>
+    <h2 data-i18n="helpTitle">Quick help</h2>
     <ol>
-      <li>Elige una de las cinco regiones y recorre su línea de tiempo.</li>
-      <li>El rombo naranja es un candidato sin identificar.</li>
-      <li>El resumen compara la exposición del visor con la primera fecha.</li>
-      <li>El GIF usa las imágenes de referencia de esa región.</li>
+      <li data-i18n="help1">Load one of the five targets and step its timeline.</li>
+      <li data-i18n="help2">An amber diamond is an unidentified candidate.</li>
+      <li data-i18n="help3">The summary compares the viewer exposure with the first date.</li>
+      <li data-i18n="help4">The GIF uses the reference frames of that field.</li>
     </ol>
-    <button class="ghost" id="help-close" type="button">Cerrar</button>
+    <button class="ghost" id="help-close" type="button" data-i18n="helpClose">Close</button>
   </dialog>
   <script>
     const themeButton = document.querySelector("#theme");
     function paintTheme(theme) {
-      const dark = theme === "dark";
-      if (dark) document.documentElement.dataset.theme = "dark";
+      const light = theme === "light";
+      if (light) document.documentElement.dataset.theme = "light";
       else delete document.documentElement.dataset.theme;
-      document.querySelector("#theme-icon").textContent = dark ? "dark_mode" : "light_mode";
-      document.querySelector("#theme-label").textContent = dark ? "Modo oscuro" : "Modo claro";
-      themeButton.setAttribute("aria-pressed", dark ? "true" : "false");
-      localStorage.setItem("serafim-theme", dark ? "dark" : "light");
+      document.querySelector("#theme-icon").textContent = light ? "light_mode" : "dark_mode";
+      themeButton.setAttribute("aria-pressed", light ? "false" : "true");
+      localStorage.setItem("serafim-console", light ? "light" : "dark");
     }
-    paintTheme(localStorage.getItem("serafim-theme") === "dark" ? "dark" : "light");
+    paintTheme(localStorage.getItem("serafim-console") === "light" ? "light" : "dark");
     themeButton.addEventListener("click", () => {
-      paintTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+      paintTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+      document.dispatchEvent(new Event("serafim-lang"));
     });
   </script>
-  <script type="module" src="js/app.js?v=3"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>
