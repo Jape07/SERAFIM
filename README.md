@@ -21,7 +21,7 @@ IRSA (SPHEREx) ──> bronze ──> silver ──> gold ──> web (GitHub Pa
 | Layer | What it stores | Format | Published? |
 | --- | --- | --- | --- |
 | Bronze | FITS cutouts exactly as they come from IRSA, plus `manifest.parquet` | FITS, Parquet | No |
-| Silver | Clean, aligned images, difference images and detections | NumPy (`.npz`), Parquet | No |
+| Silver | Frames cleaned (zodiacal light subtracted, flagged pixels masked) and reprojected onto one grid per target; sums per detector and season; differences between seasons | NumPy (`.npz`), Parquet | No |
 | Gold | Final tables and PNG files for the website | Parquet, PNG, JSON | Yes |
 
 Each layer only reads the previous one, bronze is never modified and every step is idempotent.
@@ -82,8 +82,8 @@ Each report is generated; rerun its command after the data change (silver and go
 ```text
 SERAFIM/
 ├─ serafim/                 Python package of the pipeline
-│  ├─ bronze/               download from IRSA (data engineering)
-│  ├─ silver/               cleaning, alignment, subtraction and detection (data engineering)
+│  ├─ bronze/               download from IRSA, and the fixed Gaia copy (data engineering)
+│  ├─ silver/               cleaning, reprojection, sums, differences, alignment (data engineering)
 │  ├─ gold/                 tables, PNG and export (data engineering)
 │  ├─ validation/           targets, catalogs, layers, guides, spectra, light curves,
 │  │                        trajectory, verification, markers, dipoles, public (AI & validation)
@@ -98,12 +98,15 @@ SERAFIM/
 │  ├─ img/                  SPHEREx reference images (NASA/JPL-Caltech)
 │  ├─ texts/targets.json    guides of the 5 targets (python -m serafim.validation.guides)
 │  └─ gold/                 local copy of gold (git-ignored)
-├─ config/targets.yaml      the 5 challenge targets and every pipeline setting
+├─ config/
+│  ├─ targets.yaml          the 5 challenge targets and every pipeline setting
+│  ├─ spherex_frames/       saved IRSA frame lists, used when IRSA's search is down
+│  └─ gaia_snapshot/        a fixed copy of Gaia DR3 around each target
 ├─ models/                  dipole_cnn.onnx, the experimental CNN (AI & validation)
 ├─ docs/                    reports generated from gold, the demo script and the model card
 ├─ tests/                   tests and a tiny FITS fixture
 ├─ data/                    local bronze, silver, gold, dataset and catalog cache (git-ignored)
-└─ .github/workflows/       ci.yml and publish.yml
+└─ .github/workflows/       ci.yml, publish.yml (the real pipeline) and deploy-web.yml
 ```
 
 ## Gold contract
@@ -189,11 +192,48 @@ ruff check .
 pytest
 ```
 
-Run the site locally with simulated gold:
+### Build the real site
+
+One command builds what the public site shows, the same one `publish.yml` runs:
 
 ```bash
-python -m serafim mock          # simulated gold in data/gold/
-cp -r data/gold web/gold        # web/gold/ is git-ignored
+python -m serafim run                       # bronze, silver and gold for settings.publish
+mkdir -p web/gold && cp -a data/gold/. web/gold/   # web/gold/ is git-ignored
+python -m http.server 8000 -d web           # open http://localhost:8000
+```
+
+- **The first run downloads about 3.8 GB** from IRSA (874 SPHEREx cutouts of the 5 targets) and
+  takes about an hour, because IRSA answers 503 now and then and every failed request is retried.
+  Nothing is downloaded twice: a second run only builds silver and gold (about 15 minutes on
+  GitHub Actions).
+- **Gold is checked** with `validate_gold()` before it replaces the previous one, so a failed run
+  never leaves half a site.
+- **If an archive is down, the run goes on.**
+  - IRSA's search: bronze uses the frame lists saved in `config/spherex_frames/`. Refresh them
+    with `python -m serafim bronze --save-frame-lists` when it answers.
+  - ESA's Gaia archive: alignment and the catalog layers read `config/gaia_snapshot/`. Rewrite it
+    with `python -m serafim gaia-snapshot`; Gaia DR3 does not change, so that is rarely needed.
+  - A target that still fails is left out of that run with a warning, and the others are
+    published.
+
+The same steps one by one (each takes `--target <id>`, an id from `config/targets.yaml`):
+
+| Command | Does | Writes |
+| --- | --- | --- |
+| `python -m serafim bronze` | Downloads the cutouts that are missing | `data/bronze/` and its `manifest.parquet` |
+| `python -m serafim silver` | Cleans and reprojects the frames, sums them per detector and season, subtracts seasons | `data/silver/` |
+| `python -m serafim alignment` | Measures the sums against Gaia (goal: under 0.1 px) | [docs/alignment.md](docs/alignment.md) |
+| `python -m serafim gold` | Builds the tables, `meta.json` and PNGs, with AI & validation's catalogs, spectra and trajectory | `data/gold/` |
+| `python -m serafim run --from silver` | Rebuilds silver and gold from the bronze on disk (`--from gold`: only gold) | `data/silver/`, `data/gold/` |
+
+### Only the site, without data
+
+To work on the site without downloading anything, use simulated gold. It follows the contract,
+but it is never published:
+
+```bash
+python -m serafim mock --all-targets        # simulated gold of the 5 targets in data/gold/
+mkdir -p web/gold && cp -a data/gold/. web/gold/
 python -m http.server 8000 -d web
 ```
 
