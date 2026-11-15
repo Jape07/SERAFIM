@@ -67,6 +67,7 @@ Each report is generated; rerun its command after the data change (silver and go
 | `python -m serafim.validation.targets` | `config/targets.yaml`: the 5 targets from SIMBAD, WISE and IRSA |
 | `python -m serafim.validation.layers` | the catalog layers (Gaia, CatWISE, SIMBAD, SkyBoT) of each season |
 | `python -m serafim.validation.guides` | `web/texts/targets.json`, the guides of the site |
+| `python -m serafim.validation.discoveries` | `web/texts/discoveries.json`, the moving-object candidates and the CNN's opinion, for the site |
 | `python -m serafim.validation.visibility` | [docs/visibility.md](docs/visibility.md) |
 | `python -m serafim.validation.spectra` | [docs/spectra.md](docs/spectra.md) |
 | `python -m serafim.validation.light_curves` | [docs/light_curves.md](docs/light_curves.md) |
