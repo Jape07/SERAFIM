@@ -46,7 +46,7 @@ SERAFIM/
 │  ├─ bronze/               download from IRSA (data engineering)
 │  ├─ silver/               cleaning, alignment, subtraction and detection (data engineering)
 │  ├─ gold/                 tables, PNG and export (data engineering)
-│  ├─ validation/           targets.py, catalogs.py and status.py (AI & validation)
+│  ├─ validation/           targets.py, catalogs.py, layers.py and status.py (AI & validation)
 │  ├─ ai/                   predict.py, CNN inference with ONNX (AI & validation)
 │  ├─ contract.py           gold schemas (whole team)
 │  └─ cli.py                python -m serafim
