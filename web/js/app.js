@@ -1,5 +1,7 @@
-import { detections, frames, meta, objects, regions } from "./data.js";
-import { apply, onChange, t } from "./i18n.js";
+import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
+import { apply, onChange, t } from "./i18n.js?v=w3b";
+
+Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
 const ARCSEC_PER_PIXEL = 6.15;
 const SVG = "http://www.w3.org/2000/svg";
@@ -70,7 +72,18 @@ let gifStep = 0;
 let gifFrames = [];
 let gifBlob = null;
 let loadToken = 0;
+let detector = 1;
+let sumRows = [];
+const goldTargets = new Map();
 const cache = new Map();
+const BANDS = {
+  1: [0.746, 1.117],
+  2: [1.103, 1.65],
+  3: [1.63, 2.435],
+  4: [2.403, 3.847],
+  5: [3.811, 4.43],
+  6: [4.412, 5.01],
+};
 
 function stamp(value) {
   if (typeof value === "string") return value.replace(/\.\d+Z$/, "Z");
@@ -102,9 +115,81 @@ function skyFile(regionId, frameIndex) {
   return list[at];
 }
 
-function skyFor(frame, frameIndex) {
-  if (!frame) return "";
-  return assetUrl(skyFile(frame.region_id, frameIndex));
+function when(row) {
+  return row?.mean_date_utc ?? row?.date_utc;
+}
+
+function pngUrl(row) {
+  if (!row?.png) return "";
+  return new URL(`../gold/${row.png}`, import.meta.url).href;
+}
+
+function skyFor(row) {
+  return pngUrl(row);
+}
+
+function openingDetector(targetId) {
+  return targetId === "wise_0855" ? 6 : 1;
+}
+
+function parseDetector(value, targetId) {
+  if (value === "color") return "color";
+  const number = Number(value);
+  if (value != null && value !== "" && Number.isInteger(number) && number >= 0 && number <= 6) return number;
+  return openingDetector(targetId);
+}
+
+function colorReady(rows, season) {
+  const have = new Set(rows.filter((row) => row.season === season).map((row) => row.detector));
+  return have.has(1) && have.has(3) && have.has(6);
+}
+
+function buildSequence(rows, chosen) {
+  if (chosen === "color") {
+    const seasons = [...new Set(rows.filter((row) => row.season >= 1).map((row) => row.season))].sort((a, b) => a - b);
+    return seasons.filter((season) => colorReady(rows, season)).map((season) => {
+      const parts = rows.filter((row) => row.season === season && [1, 3, 6].includes(row.detector));
+      const dates = parts.map((row) => new Date(stamp(when(row))).getTime()).filter(Number.isFinite);
+      const mean = dates.length ? new Date(dates.reduce((sum, item) => sum + item, 0) / dates.length).toISOString() : when(parts[0]);
+      return {
+        season,
+        detector: "color",
+        mean_date_utc: mean,
+        n_frames: parts.reduce((sum, row) => sum + Number(row.n_frames || 0), 0),
+        png: `png/${activeTarget}/color_s${season}.png`,
+      };
+    });
+  }
+  return rows
+    .filter((row) => row.detector === chosen && row.season >= 1)
+    .sort((a, b) => a.season - b.season);
+}
+
+function detectorLabel(value) {
+  if (value === "color") return t("detectorColor");
+  if (value === 0) return t("detectorAll");
+  return `D${value}`;
+}
+
+function bandText(value) {
+  if (value === "color") return t("bandColor");
+  if (value === 0) return t("bandAll");
+  const pair = BANDS[value];
+  return pair ? `${pair[0]}–${pair[1]} µm` : "—";
+}
+
+function markDetectors() {
+  const group = document.querySelector("#detectors");
+  if (!group) return;
+  const season = sequence[index]?.season;
+  for (const button of group.querySelectorAll("button")) {
+    const value = button.dataset.detector;
+    const selected = value === "color" ? detector === "color" : Number(value) === detector;
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.disabled = value === "color"
+      ? !colorReady(sumRows, season)
+      : !sumRows.some((row) => row.detector === Number(value) && row.season >= 1);
+  }
 }
 
 function loadImage(url) {
@@ -176,24 +261,20 @@ function fillEpochs() {
   if (!frame || !baseline) return;
   const now = tally(frame);
   const base = tally(baseline);
-  document.querySelector("#stat-known").textContent = formatNumber(now.known);
-  document.querySelector("#stat-candidate").textContent = formatNumber(now.candidate);
-  document.querySelector("#stat-discarded").textContent = formatNumber(now.discarded);
-  document.querySelector("#stat-frames").textContent = formatNumber(sequence.length);
-  document.querySelector("#base-known").textContent = formatNumber(base.known);
-  document.querySelector("#base-candidate").textContent = formatNumber(base.candidate);
-  document.querySelector("#base-discarded").textContent = formatNumber(base.discarded);
-  document.querySelector("#base-frames").textContent = "1";
-  document.querySelector("#epoch-now").textContent = fecha(frame.date_utc);
-  document.querySelector("#epoch-then").textContent = fecha(baseline.date_utc);
+  document.querySelector("#stat-known").textContent = "—";
+  document.querySelector("#stat-candidate").textContent = "—";
+  document.querySelector("#stat-discarded").textContent = "—";
+  document.querySelector("#stat-frames").textContent = formatNumber(frame.n_frames || 0);
+  document.querySelector("#base-known").textContent = "—";
+  document.querySelector("#base-candidate").textContent = "—";
+  document.querySelector("#base-discarded").textContent = "—";
+  document.querySelector("#base-frames").textContent = formatNumber(baseline.n_frames || 0);
+  document.querySelector("#epoch-now").textContent = fecha(when(frame));
+  document.querySelector("#epoch-then").textContent = fecha(when(baseline));
   const delta = now.candidate - base.candidate;
   const signed = `${delta >= 0 ? "+" : ""}${delta}`;
   document.querySelector("#delta-candidates").textContent = t("candidatesDelta", { value: signed });
   document.querySelector("#delta-span").textContent = t("timeSpan", { value: intervalo(baseline, frame) });
-  document.querySelector("#updated").textContent = t("differenceLine", {
-    value: intervalo(baseline, frame),
-    name: targetOf().name,
-  });
 }
 
 function statusOf(object) {
@@ -266,7 +347,7 @@ function movement(object, fromFrame, toFrame) {
 }
 
 function intervalo(fromFrame, toFrame) {
-  const ms = Math.abs(new Date(stamp(toFrame.date_utc)) - new Date(stamp(fromFrame.date_utc)));
+  const ms = Math.abs(new Date(stamp(when(toFrame))) - new Date(stamp(when(fromFrame))));
   if (!Number.isFinite(ms)) return "—";
   const hours = ms / 36e5;
   if (hours < 48) return t("hours", { n: Math.max(1, Math.round(hours)) });
@@ -298,13 +379,13 @@ function fillPanel() {
   const object = byObject.get(selectedId);
   const status = document.querySelector("#panel-status");
   const prob = document.querySelector("#panel-prob");
-  document.querySelector("#panel-date").textContent = frame ? fecha(frame.date_utc) : "—";
-  document.querySelector("#panel-region").textContent = regionName(frame?.region_id);
-  const wave = frame ? `${frame.wavelength_um} µm` : "—";
+  document.querySelector("#panel-date").textContent = frame ? fecha(when(frame)) : "—";
+  const wave = frame ? bandText(frame.detector === "color" ? "color" : frame.detector) : "—";
   document.querySelector("#panel-wave").textContent = wave;
   document.querySelector("#wave-read").textContent = wave;
-  document.querySelector("#panel-now").textContent = frame ? fecha(frame.date_utc) : "—";
-  document.querySelector("#panel-then").textContent = baseline ? fecha(baseline.date_utc) : "—";
+  document.querySelector("#panel-now").textContent = frame ? fecha(when(frame)) : "—";
+  document.querySelector("#panel-then").textContent = baseline ? fecha(when(baseline)) : "—";
+  document.querySelector("#panel-region").textContent = targetOf().name;
   document.querySelector("#panel-span").textContent =
     frame && baseline ? t("interval", { value: intervalo(baseline, frame) }) : t("intervalEmpty");
   if (!object) {
@@ -361,8 +442,8 @@ function fillCompare() {
   const leftIndex = left === frame ? index + (diffBox.checked ? 1 : 0) : 0;
   now.src = skyFor(left, leftIndex);
   then.src = skyFor(baseline, 0);
-  document.querySelector("#cmp-now-label").textContent = t(showingNow ? "photoCurrent" : "photoBlink", { date: fecha(left.date_utc) });
-  document.querySelector("#cmp-then-label").textContent = t("photoBase", { date: fecha(baseline.date_utc) });
+  document.querySelector("#cmp-now-label").textContent = t(showingNow ? "photoCurrent" : "photoBlink", { date: fecha(when(left)) });
+  document.querySelector("#cmp-then-label").textContent = t("photoBase", { date: fecha(when(baseline)) });
 
   const recentIds = new Set(hits.filter((hit) => hit.frame_id === frame.frame_id).map((hit) => hit.object_id));
   const baseIds = new Set(hits.filter((hit) => hit.frame_id === baseline.frame_id).map((hit) => hit.object_id));
@@ -395,24 +476,41 @@ function fillCompare() {
 async function render() {
   const frame = sequence[index];
   if (!frame) return;
-  const picture = await loadImage(skyFor(frame, index + (diffBox.checked ? 1 : 0)));
+  const picture = await loadImage(pngUrl(frame));
+  if (!picture) return;
   image.src = picture.src;
-  image.alt = t("frameAltDyn", { name: titleOf(frame.region_id) });
-  draw(frame);
-  caption.textContent = `${stamp(frame.date_utc)} · ${frame.wavelength_um} µm · ${index + 1} / ${sequence.length}`;
-  slider.value = String(index);
   const target = targetOf();
-  document.querySelector("#sector").textContent = target.name;
-  document.querySelector("#sky-ra").textContent = hms(target.ra);
-  document.querySelector("#sky-dec").textContent = dms(target.dec);
+  const placed = goldTargets.get(activeTarget);
+  const shown = frame.detector === "color" ? "color" : frame.detector;
+  image.alt = t("sumAlt", { name: placed?.name || target.name, season: frame.season, detector: detectorLabel(shown) });
+  marks.replaceChildren();
+  caption.textContent = t("sumCaption", {
+    date: stamp(when(frame)),
+    detector: detectorLabel(shown),
+    band: bandText(shown),
+    frames: frame.n_frames ?? 0,
+  });
+  const readout = document.querySelector("#cnn-out");
+  if (activeTarget === "wise_0855" && shown >= 1 && shown <= 4) readout.textContent = t("wiseNeighbor");
+  else if (activeTarget === "wise_0855") readout.textContent = t("wiseGuide");
+  else if (!selectedId) readout.textContent = t("cnnIdle");
+  slider.value = String(index);
+  document.querySelector("#sector").textContent = placed?.name || target.name;
+  document.querySelector("#sky-ra").textContent = hms(placed?.ra_now ?? target.ra);
+  document.querySelector("#sky-dec").textContent = dms(placed?.dec_now ?? target.dec);
   fillEpochs();
   const url = new URL(location.href);
-  url.searchParams.set("region", frame.region_id);
-  url.searchParams.set("frame", frame.frame_id);
+  url.searchParams.set("target", activeTarget);
+  url.searchParams.set("detector", String(detector));
+  url.searchParams.set("season", String(frame.season));
+  url.searchParams.delete("region");
+  url.searchParams.delete("frame");
   history.replaceState(null, "", url);
   fillPanel();
   fillCompare();
-  loadImage(skyFor(sequence[(index + 1) % sequence.length], index + 1));
+  markDetectors();
+  loadImage(pngUrl(sequence[index - 1]));
+  loadImage(pngUrl(sequence[index + 1]));
 }
 
 function move(step) {
@@ -536,8 +634,7 @@ function renderRegions() {
     button.textContent = active ? t("viewing") : t("loadTarget");
     button.addEventListener("click", () => {
       activeTarget = target.id;
-      const region = goldFor(target.id);
-      if (region) openRegion(region.region_id, { scroll: true });
+      openRegion(target.id, { scroll: true, detector: openingDetector(target.id) });
     });
     card.append(head, text, button);
     host.append(card);
@@ -545,46 +642,8 @@ function renderRegions() {
 }
 
 function renderCatalog() {
-  const body = document.querySelector("#rows");
-  body.replaceChildren();
-  const names = new Map(regionList.map((region) => [region.region_id, region.name]));
-  document.querySelector("#catalog-status").textContent = t("catalogCount", {
-    objects: catalog.length,
-    regions: regionList.length,
-  });
-  for (const row of catalog) {
-    const info = statusOf(row);
-    const tr = document.createElement("tr");
-    const name = document.createElement("td");
-    const wrap = document.createElement("span");
-    wrap.className = "name-cell";
-    const swatch = document.createElement("i");
-    swatch.className = `swatch ${row.status === "Known" ? "known" : row.status === "Discarded" ? "discarded" : "candidate"}`;
-    if (row.status === "Discarded") swatch.textContent = "×";
-    const label = document.createElement("span");
-    label.textContent = row.name;
-    wrap.append(swatch, label);
-    name.append(wrap);
-    const state = document.createElement("td");
-    const tag = document.createElement("span");
-    tag.className = `tag ${info.tag}`.trim();
-    tag.textContent = info.label;
-    state.append(tag);
-    const where = document.createElement("td");
-    where.textContent = names.get(row.region_id) || row.region_id;
-    const when = document.createElement("td");
-    when.textContent = fecha(row.last_date_utc || row.first_date_utc);
-    const action = document.createElement("td");
-    action.className = "right";
-    const link = document.createElement("button");
-    link.type = "button";
-    link.className = "ghost";
-    link.textContent = t("viewInViewer");
-    link.addEventListener("click", () => focusObject(row));
-    action.append(link);
-    tr.append(name, state, where, when, action);
-    body.append(tr);
-  }
+  document.querySelector("#rows").replaceChildren();
+  document.querySelector("#catalog-status").textContent = t("catalogLater");
 }
 
 async function focusObject(object) {
@@ -596,34 +655,25 @@ async function focusObject(object) {
   document.querySelector("#visor").scrollIntoView({ behavior: "smooth" });
 }
 
-async function openRegion(regionId, options = {}) {
+async function openRegion(targetId, options = {}) {
   const token = ++loadToken;
   setPlaying(false);
-  const region = regionList.find((item) => item.region_id === regionId) || regionList[0];
-  if (!region) return;
-  const [frameRows, objectRows, detectionRows] = await Promise.all([
-    frames(region.region_id),
-    objects(region.region_id),
-    detections(region.region_id),
-  ]);
+  if (!goldTargets.has(targetId) && !TARGETS.some((item) => item.id === targetId)) return;
+  activeTarget = targetId;
+  const rows = await sums(targetId);
   if (token !== loadToken) return;
-  sequence = frameRows;
-  byObject = new Map(objectRows.map((row) => [row.object_id, row]));
-  hits = detectionRows;
+  sumRows = rows;
+  hits = [];
+  byObject = new Map();
+  selectedId = "";
+  detector = options.detector ?? detector;
+  sequence = buildSequence(sumRows, detector);
+  const season = Number(options.season);
+  const at = sequence.findIndex((row) => row.season === season);
+  index = at >= 0 ? at : 0;
   slider.max = String(Math.max(sequence.length - 1, 0));
-  const requested = options.frame
-    ? sequence.findIndex((frame) => frame.frame_id === options.frame)
-    : -1;
-  if (requested >= 0) {
-    index = requested;
-  } else {
-    const candidate = objectRows.find((row) => row.status === "Unidentified candidate");
-    const hit = candidate && detectionRows.find((item) => item.object_id === candidate.object_id);
-    index = hit ? Math.max(0, sequence.findIndex((frame) => frame.frame_id === hit.frame_id)) : 0;
-    selectedId = candidate?.object_id || objectRows[0]?.object_id || "";
-  }
-  if (options.frame && !selectedId) selectedId = objectRows[0]?.object_id || "";
   renderRegions();
+  markDetectors();
   restartPreview();
   await render();
   if (options.scroll) document.querySelector("#visor").scrollIntoView({ behavior: "smooth" });
@@ -642,6 +692,23 @@ slider.addEventListener("input", () => {
   render();
 });
 diffBox.addEventListener("change", () => render());
+document.querySelector("#detectors").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button || button.disabled) return;
+  const value = button.dataset.detector;
+  const next = value === "color" ? "color" : Number(value);
+  if (next === detector) return;
+  setPlaying(false);
+  const season = sequence[index]?.season;
+  detector = next;
+  sequence = buildSequence(sumRows, detector);
+  const at = sequence.findIndex((row) => row.season === season);
+  index = at >= 0 ? at : 0;
+  slider.max = String(Math.max(sequence.length - 1, 0));
+  markDetectors();
+  restartPreview();
+  render();
+});
 discardedBox.addEventListener("change", () => render());
 document.querySelector("#blink").addEventListener("click", () => {
   blinkOn = !blinkOn;
@@ -734,25 +801,25 @@ onChange(() => {
 
 try {
   const params = new URLSearchParams(location.search);
-  const [found, info, groups] = await Promise.all([
-    regions(),
-    meta(),
-    regions().then((list) => Promise.all(list.map((region) => objects(region.region_id)))),
-  ]);
+  const [found, info] = await Promise.all([targets(), meta()]);
   regionList = found;
-  catalog = groups.flat();
+  goldTargets.clear();
+  for (const row of found) goldTargets.set(row.target_id, row);
   renderCatalog();
-  const wanted = params.get("region") || "barnard";
-  if (TARGETS.some((item) => item.id === wanted)) activeTarget = wanted;
-  const region = TARGETS.some((item) => item.id === wanted)
-    ? goldFor(wanted)
-    : found.find((item) => item.region_id === wanted) || found[0];
-  await openRegion(region.region_id, { frame: params.get("frame") || "" });
+  const wanted = params.get("target") || params.get("region") || "barnard";
+  const match = found.find((row) => row.target_id === wanted) || found[0];
+  if (match) activeTarget = match.target_id;
+  detector = parseDetector(params.get("detector"), activeTarget);
+  document.querySelector("#updated").textContent = info?.run_date_utc
+    ? t("tablesLoaded", { date: info.run_date_utc })
+    : t("tablesLoaded", { date: "—" });
+  if (match) await openRegion(match.target_id, { detector, season: params.get("season") });
   if (location.hash) {
-    const target = document.querySelector(location.hash);
-    if (target) target.scrollIntoView();
+    const place = document.querySelector(location.hash);
+    if (place) place.scrollIntoView();
   }
 } catch (error) {
   document.querySelector("#updated").textContent = t("tablesDown");
+  document.querySelector("#catalog-status").textContent = t("tablesDown");
   console.error(error);
 }

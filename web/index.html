@@ -107,6 +107,16 @@
               <div class="mini"><span data-i18n="thenLabel">Baseline</span><strong id="panel-then">—</strong></div>
               <div class="mini"><span data-i18n="nowLabel">Current</span><strong id="panel-now">—</strong></div>
             </div>
+            <div class="choice" id="detectors" role="group" aria-label="Detector">
+              <button type="button" data-detector="1">D1</button>
+              <button type="button" data-detector="2">D2</button>
+              <button type="button" data-detector="3">D3</button>
+              <button type="button" data-detector="4">D4</button>
+              <button type="button" data-detector="5">D5</button>
+              <button type="button" data-detector="6">D6</button>
+              <button type="button" data-detector="0" data-i18n="detectorAll">All</button>
+              <button type="button" data-detector="color" data-i18n="detectorColor">Color</button>
+            </div>
             <label class="label" for="slider" data-i18n="timeline">Timeline</label>
             <input class="slider" id="slider" type="range" min="0" max="0" value="0" aria-valuemin="0">
             <p class="hint" id="caption"></p>
@@ -306,6 +316,6 @@
       document.dispatchEvent(new Event("serafim-lang"));
     });
   </script>
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=w3b"></script>
 </body>
 </html>
