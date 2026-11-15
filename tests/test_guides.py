@@ -95,11 +95,23 @@ def test_recommended_detectors_have_frames(guide):
 
 
 def test_wise_0855_opens_where_spherex_sees_it():
-    """The visibility check (docs/visibility.md) sees it in D6, and in D5 with every season."""
+    """Only D6 reaches S/N 5 in the site's images (docs/verification.md): D5 stays at 4."""
     how = BY_ID["wise_0855"]["how_to_look"]
-    assert how["detectors"] == [6, 5]  # the first one is the one the viewer opens
+    assert how["detectors"] == [6]
     assert how["mode"] == "all_seasons"
-    assert BY_ID["wise_0855"]["facts"]["seen_in_detectors"] == [6, 5]
+    assert BY_ID["wise_0855"]["facts"]["seen_in_detectors"] == [6]
+    assert "too faint" in how["text"]
+
+
+def test_recommended_detectors_are_where_the_real_gold_sees_the_target():
+    """Task A6 measured where each target is detected in the real gold."""
+    if not guides.VERIFICATION_PATH.exists():
+        pytest.skip("no docs/verification.json")
+    verified = json.loads(guides.VERIFICATION_PATH.read_text(encoding="utf-8"))
+    for target_id, guide in BY_ID.items():
+        if target_id in verified:
+            seen = set(verified[target_id]["seen_in_detectors"])
+            assert set(guide["how_to_look"]["detectors"]) <= seen, target_id
 
 
 def test_wise_0855_warns_about_the_star_it_passes():
@@ -215,8 +227,23 @@ def test_saturated_targets_say_so():
 
 def test_rw_aur_does_not_saturate_every_frame_of_detector_1():
     text = " ".join(BY_ID["rw_aur"]["watch_out"])
-    assert "sometimes in detector 1" in text
+    always, sometimes = guides.saturation_claims(TARGETS["rw_aur"])
+    assert 1 in sometimes and 1 not in always
+    assert "sometimes in detector" in text and guides._list(sometimes) in text
     assert BY_ID["rw_aur"]["how_to_look"]["detectors"] == [1]
+
+
+def test_the_saturation_sentence_follows_the_real_gold():
+    """RW Aurigae was fainter in season 1: gold does not paint detectors 1 and 3 every season."""
+    if not guides.VERIFICATION_PATH.exists():
+        pytest.skip("no docs/verification.json")
+    verified = json.loads(guides.VERIFICATION_PATH.read_text(encoding="utf-8"))
+    for target_id in ("barnard", "rw_aur", "r_dra"):
+        painted = verified[target_id]["saturated"]
+        assert guides.saturation_claims(TARGETS[target_id]) == (
+            painted["always"],
+            painted["sometimes"],
+        )
 
 
 def test_motion_directions_on_a_north_up_image():
