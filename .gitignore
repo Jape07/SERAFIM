@@ -3,6 +3,8 @@ data/
 web/gold/
 *.fits
 *.fits.gz
+# A tiny real cutout for the tests (EPSF removed, < 1 MB)
+!tests/fixtures/*.fits
 
 # Training artifacts (only the final ONNX model in models/ is committed)
 *.pt

@@ -2,6 +2,7 @@
 
 - `python -m serafim mock [--all-targets]`: simulated gold in data/gold/.
 - `python -m serafim bronze [--target X]`: IRSA cutouts in data/bronze/ (task D3).
+- `python -m serafim silver [--target X] [--force]`: frames in data/silver/ (task D4).
 - `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
 
 Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
@@ -38,7 +39,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bronze_cmd.add_argument("--target", help=TARGET_HELP)
 
-    run = commands.add_parser("run", help="Run the full pipeline (task D9).")
+    silver_cmd = commands.add_parser(
+        "silver", help="Clean, mask and reproject bronze frames to data/silver/ (task D4)."
+    )
+    silver_cmd.add_argument("--target", help=TARGET_HELP)
+    silver_cmd.add_argument(
+        "--force", action="store_true", help="Reproject frames that are already in silver."
+    )
+
+    run =commands.add_parser("run", help="Run the full pipeline (task D9).")
     run.add_argument("--target", help=TARGET_HELP)
     run.add_argument(
         "--from",
@@ -59,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         return mock(Path(args.out), all_targets=args.all_targets)
     if args.command == "bronze":
         return bronze(args.target)
+    if args.command == "silver":
+        return silver(args.target, force=args.force)
     log.error("Command '%s' is not implemented yet (task D9).", args.command)
     return 1
 
@@ -72,6 +83,19 @@ def bronze(target_id: str | None) -> int:
     except ArchiveError as error:
         log.error("%s", error)
         return 1
+    return 0
+
+
+def silver(target_id: str | None, *, force: bool = False) -> int:
+    """Silver 1: frames cleaned and reprojected. Sums and differences come in D5 and D6."""
+    from serafim.silver.frames import build_frames
+
+    try:
+        written = build_frames(target_id, force=force)
+    except (FileNotFoundError, ValueError) as error:
+        log.error("%s", error)
+        return 1
+    log.info("Silver: %d frames reprojected now.", written)
     return 0
 
 
