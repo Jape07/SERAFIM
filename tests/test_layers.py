@@ -189,6 +189,29 @@ def test_catwise_along_a_fast_target_path_is_left_out(monkeypatch):
     assert set(rows.query("catalog == 'catwise'")["name"]) == {"far star"}
 
 
+def test_catwise_in_the_halo_of_a_star_that_saturates_wise_is_left_out(monkeypatch):
+    """Task A8: false CatWISE entries 67 to 126 arcsec around Barnard's Star (W2 = 3.7)."""
+    bright = {**STAR, "mag": {"W2": 3.7}}  # halo radius ~170 arcsec
+    at_epoch = targets.propagate(bright, Time(catalogs.CATWISE_EPOCH_JYEAR, format="jyear"))
+    ghost = {"name": "ghost", "ra": at_epoch.ra.deg, "dec": at_epoch.dec.deg + 80 / 3600}
+    real = {"name": "real star", "ra": at_epoch.ra.deg, "dec": at_epoch.dec.deg - 80 / 3600}
+    gaia_star = {"name": "Gaia star", "ra": real["ra"], "dec": real["dec"] + 1 / 3600}
+    Fakes(monkeypatch, catwise=sources("CatWISE", [ghost, real, FAR]),
+          gaia=sources("Gaia", [gaia_star, FAR]))  # fmt: skip
+    rows = layers.catalog_layers([bright], FRAMES, settings=SETTINGS, skybot=False)
+    assert set(rows.query("catalog == 'catwise'")["name"]) == {"real star", "far star"}
+    assert layers.halo_radius(3.7) == pytest.approx(172, abs=1)
+    assert layers.halo_radius(-1.0) == layers.HALO_MAX_ARCSEC  # R Draconis: W2 = 0.1
+
+
+def test_a_bright_catwise_entry_has_a_halo_too(monkeypatch):
+    star = {"name": "bright", "ra": STAR["ra_now"] - 0.04, "dec": STAR["dec_now"], "mag": 5.0}
+    ghost = {"name": "ghost", "ra": star["ra"], "dec": star["dec"] + 60 / 3600, "mag": 13.0}
+    Fakes(monkeypatch, catwise=sources("CatWISE", [star, ghost]))
+    names = set(run(skybot=False).query("catalog == 'catwise'")["name"])
+    assert names == {"bright"}  # a star is not inside its own halo
+
+
 def test_skybot_once_per_visit(monkeypatch):
     asteroid = {"name": "Ceres", "ra": STAR["ra_now"], "dec": STAR["dec_now"], "mag": 9.0,
                 "url": "https://ssp.imcce.fr/x"}  # fmt: skip

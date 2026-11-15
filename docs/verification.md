@@ -24,7 +24,7 @@ saturated, so the target is seen and an S/N means nothing; — : no frames there
 - ✅ **motion**: The catalog moves it 1.66 px from season 1 to 3. Measured 10.43 ± 0.37 arcsec/yr against 10.40 from the catalog (seasons 1, 2, 3); every season within 0.15 px of its catalog position.
 - ⚠️ **spectrum**: 17 points, 17 doubtful (edge, bad pixels or a poor fit). Saturated: its absolute flux is not reliable (docs/spectra.md); the site should draw those points hollow.
 - ⚠️ **brightness**: Control, a star that does not change: its largest certain ratio is 1.30 (detector 2, season 3). That is at the 30% the guides require before telling a change: smaller changes in one detector are not believed.
-- ✅ **catalogs**: Rows: gaia 6440, catwise 3548, simbad 300, skybot 4; a marker sits on the target in every season.
+- ✅ **catalogs**: Rows: gaia 6440, catwise 3384, simbad 300, skybot 4; a marker sits on the target in every season.
 
 | Detector | Season 1 | Season 2 | Season 3 | All seasons |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,7 @@ saturated, so the target is seen and an S/N means nothing; — : no frames there
 - ✅ **saturation**: Gold paints the center saturated in every season of detectors 2, 4, 5, 6 and in some seasons of 1, 3; the guide says always 2, 4, 5, 6, sometimes 1, 3. Frame flags at the target: OVERFLOW 146, TRANSIENT 81, BLOOM 78.
 - ⚠️ **spectrum**: 138 points, 138 doubtful (edge, bad pixels or a poor fit). Saturated: its absolute flux is not reliable (docs/spectra.md); the site should draw those points hollow.
 - ✅ **brightness**: Detector 1: 1.54 times the first season in season 3 (Measured: in detector 1 it was 1.5 times as bright in September 2026 as in September 2025.)
-- ✅ **catalogs**: Rows: gaia 4136, catwise 2852, simbad 176, skybot 49; a marker sits on the target in every season.
+- ✅ **catalogs**: Rows: gaia 4136, catwise 2848, simbad 176, skybot 49; a marker sits on the target in every season.
 
 | Detector | Season 1 | Season 2 | Season 3 | All seasons |
 | --- | --- | --- | --- | --- |

@@ -52,6 +52,72 @@
           6
         ],
         "frames_per_detector_and_season": 12
+      },
+      "markers": {
+        "default_max_mag": {
+          "catwise": 13.5,
+          "gaia": 15.0
+        },
+        "visible_max_mag": {
+          "catwise": {
+            "1": 15.0,
+            "2": 15.0,
+            "3": 15.0,
+            "4": 15.0,
+            "5": 14.5,
+            "6": 14.5
+          },
+          "gaia": {
+            "1": 17.5,
+            "2": 17.0,
+            "3": 17.0,
+            "4": 17.0,
+            "5": 16.5,
+            "6": 16.0
+          }
+        },
+        "projection_check": [
+          {
+            "ra": 269.446074,
+            "dec": 4.7707026,
+            "x": 72.5,
+            "y": 72.5,
+            "png_x": 72.5,
+            "png_y": 72.5
+          },
+          {
+            "ra": 269.5531992,
+            "dec": 4.6639238,
+            "x": 10.0,
+            "y": 10.0,
+            "png_x": 10.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 269.3389488,
+            "dec": 4.6639238,
+            "x": 135.0,
+            "y": 10.0,
+            "png_x": 135.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 269.5532326,
+            "dec": 4.8774648,
+            "x": 10.0,
+            "y": 135.0,
+            "png_x": 10.0,
+            "png_y": 10.0
+          },
+          {
+            "ra": 269.3389154,
+            "dec": 4.8774648,
+            "x": 135.0,
+            "y": 135.0,
+            "png_x": 135.0,
+            "png_y": 10.0
+          }
+        ]
       }
     },
     {
@@ -103,6 +169,72 @@
             "6": 3.37
           }
         }
+      },
+      "markers": {
+        "default_max_mag": {
+          "catwise": 13.5,
+          "gaia": 16.0
+        },
+        "visible_max_mag": {
+          "catwise": {
+            "1": 13.5,
+            "2": 14.5,
+            "3": 15.0,
+            "4": 15.0,
+            "5": 15.0,
+            "6": 14.5
+          },
+          "gaia": {
+            "1": 16.0,
+            "2": 17.5,
+            "3": 17.0,
+            "4": 17.0,
+            "5": 17.0,
+            "6": 16.0
+          }
+        },
+        "projection_check": [
+          {
+            "ra": 331.0984229,
+            "dec": -56.8012431,
+            "x": 72.5,
+            "y": 72.5,
+            "png_x": 72.5,
+            "png_y": 72.5
+          },
+          {
+            "ra": 331.2939782,
+            "dec": -56.9078612,
+            "x": 10.0,
+            "y": 10.0,
+            "png_x": 10.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 330.9028676,
+            "dec": -56.9078612,
+            "x": 135.0,
+            "y": 10.0,
+            "png_x": 135.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 331.2928676,
+            "dec": -56.694321,
+            "x": 10.0,
+            "y": 135.0,
+            "png_x": 10.0,
+            "png_y": 10.0
+          },
+          {
+            "ra": 330.9039782,
+            "dec": -56.694321,
+            "x": 135.0,
+            "y": 135.0,
+            "png_x": 135.0,
+            "png_y": 10.0
+          }
+        ]
       }
     },
     {
@@ -154,6 +286,72 @@
           }
         },
         "frames_per_detector_and_season": 12
+      },
+      "markers": {
+        "default_max_mag": {
+          "catwise": 15.0,
+          "gaia": 16.5
+        },
+        "visible_max_mag": {
+          "catwise": {
+            "1": 15.0,
+            "2": 15.0,
+            "3": 15.0,
+            "4": 15.0,
+            "5": 15.0,
+            "6": 15.0
+          },
+          "gaia": {
+            "1": 18.0,
+            "2": 18.0,
+            "3": 18.0,
+            "4": 18.0,
+            "5": 17.0,
+            "6": 16.5
+          }
+        },
+        "projection_check": [
+          {
+            "ra": 133.757791,
+            "dec": -7.2420196,
+            "x": 72.5,
+            "y": 72.5,
+            "png_x": 72.5,
+            "png_y": 72.5
+          },
+          {
+            "ra": 133.8654458,
+            "dec": -7.3487775,
+            "x": 10.0,
+            "y": 10.0,
+            "png_x": 10.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 133.6501362,
+            "dec": -7.3487775,
+            "x": 135.0,
+            "y": 10.0,
+            "png_x": 135.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 133.8653948,
+            "dec": -7.1352364,
+            "x": 10.0,
+            "y": 135.0,
+            "png_x": 10.0,
+            "png_y": 10.0
+          },
+          {
+            "ra": 133.6501872,
+            "dec": -7.1352364,
+            "x": 135.0,
+            "y": 135.0,
+            "png_x": 135.0,
+            "png_y": 10.0
+          }
+        ]
       }
     },
     {
@@ -216,6 +414,72 @@
           }
         },
         "frames_per_detector_and_season": 12
+      },
+      "markers": {
+        "default_max_mag": {
+          "catwise": 13.5,
+          "gaia": 16.0
+        },
+        "visible_max_mag": {
+          "catwise": {
+            "1": 15.0,
+            "2": 15.0,
+            "3": 15.0,
+            "4": 15.0,
+            "5": 15.0,
+            "6": 14.5
+          },
+          "gaia": {
+            "1": 18.0,
+            "2": 18.0,
+            "3": 18.0,
+            "4": 17.5,
+            "5": 17.0,
+            "6": 16.5
+          }
+        },
+        "projection_check": [
+          {
+            "ra": 76.9565886,
+            "dec": 30.4012865,
+            "x": 72.5,
+            "y": 72.5,
+            "png_x": 72.5,
+            "png_y": 72.5
+          },
+          {
+            "ra": 77.0802451,
+            "dec": 30.2944577,
+            "x": 10.0,
+            "y": 10.0,
+            "png_x": 10.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 76.8329321,
+            "dec": 30.2944577,
+            "x": 135.0,
+            "y": 10.0,
+            "png_x": 135.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 77.0805158,
+            "dec": 30.5079986,
+            "x": 10.0,
+            "y": 135.0,
+            "png_x": 10.0,
+            "png_y": 10.0
+          },
+          {
+            "ra": 76.8326614,
+            "dec": 30.5079986,
+            "x": 135.0,
+            "y": 135.0,
+            "png_x": 135.0,
+            "png_y": 10.0
+          }
+        ]
       }
     },
     {
@@ -288,6 +552,63 @@
         },
         "measured_period_days": 243.5,
         "frames_per_detector_and_season": 12
+      },
+      "markers": {
+        "default_max_mag": {
+          "gaia": 15.5
+        },
+        "visible_max_mag": {
+          "gaia": {
+            "1": 18.0,
+            "2": 18.0,
+            "3": 17.0,
+            "4": 16.5,
+            "5": 16.5,
+            "6": 15.5
+          }
+        },
+        "projection_check": [
+          {
+            "ra": 248.1672204,
+            "dec": 66.7550253,
+            "x": 72.5,
+            "y": 72.5,
+            "png_x": 72.5,
+            "png_y": 72.5
+          },
+          {
+            "ra": 248.4365863,
+            "dec": 66.6480242,
+            "x": 10.0,
+            "y": 10.0,
+            "png_x": 10.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 247.8978545,
+            "dec": 66.6480242,
+            "x": 135.0,
+            "y": 10.0,
+            "png_x": 135.0,
+            "png_y": 135.0
+          },
+          {
+            "ra": 248.4389337,
+            "dec": 66.8615632,
+            "x": 10.0,
+            "y": 135.0,
+            "png_x": 10.0,
+            "png_y": 10.0
+          },
+          {
+            "ra": 247.8955071,
+            "dec": 66.8615632,
+            "x": 135.0,
+            "y": 135.0,
+            "png_x": 135.0,
+            "png_y": 10.0
+          }
+        ]
       }
     }
   ],
@@ -360,24 +681,33 @@
     {
       "id": "gaia",
       "name": "Gaia",
-      "text": "Stars measured by ESA's Gaia space telescope, moved to the date of each season."
+      "text": "Stars measured by ESA's Gaia space telescope, moved to the date of each season. At first only the stars bright enough to see in these images are marked.",
+      "band": "G",
+      "default_max_mag": 15.0
     },
     {
       "id": "catwise",
       "name": "CatWISE",
-      "text": "Infrared sources seen by NASA's WISE telescope, moved by their measured motion. Entries along the target's own path are hidden: there the catalog is unreliable."
+      "text": "Infrared sources seen by NASA's WISE telescope, moved by their measured motion. At first only the brightest are marked. Entries along the target's own path or in the glare of a very bright star are hidden: there the catalog is unreliable.",
+      "band": "W2",
+      "default_max_mag": 13.5
     },
     {
       "id": "simbad",
       "name": "SIMBAD",
-      "text": "Named objects from the SIMBAD database, including the target itself at each season."
+      "text": "Named objects from the SIMBAD database, including the target itself at each season.",
+      "band": "V",
+      "default_max_mag": null
     },
     {
       "id": "skybot",
       "name": "Asteroids",
-      "text": "Known asteroids that crossed the field during a visit, only those bright enough for SPHEREx."
+      "text": "Known asteroids that crossed the field during a visit, only those bright enough for SPHEREx.",
+      "band": "V",
+      "default_max_mag": null
     }
   ],
+  "markers_note": "Draw only markers inside the image. Each target's `markers.default_max_mag` is the first cut of each layer; `markers.visible_max_mag` (per detector) is how faint SPHEREx still shows them. `markers.projection_check`: (ra, dec) -> png_x, png_y from astropy, to test the viewer's projection of wcs_json. Pixel centers are whole numbers (0 = center of the first pixel) and png_y counts from the top (north up).",
   "flags": [
     {
       "bit": 0,

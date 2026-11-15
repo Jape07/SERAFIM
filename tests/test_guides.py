@@ -338,3 +338,32 @@ def test_r_draconis_points_at_the_seasons_where_its_glow_changes_most():
 def test_wise_0855_says_how_faint_it_is():
     assert "zoom in" in BY_ID["wise_0855"]["what_to_look_at"]
     assert "barely above the noise" in BY_ID["wise_0855"]["what_to_look_at"]
+
+
+# --- Task A8: the catalog markers the viewer draws ----------------------------------------------
+
+
+def test_each_guide_carries_its_marker_cuts_and_projection_check():
+    if not guides.MARKERS_PATH.exists():
+        pytest.skip("no docs/markers.json")
+    measured = json.loads(guides.MARKERS_PATH.read_text(encoding="utf-8"))
+    for target_id, guide in BY_ID.items():
+        if target_id not in measured:
+            continue
+        markers = guide["markers"]
+        assert markers["default_max_mag"] == measured[target_id]["default_max_mag"]
+        assert len(markers["projection_check"]) == 5
+        for catalog, cut in markers["default_max_mag"].items():  # never fainter than visible
+            assert cut <= min(markers["visible_max_mag"][catalog].values())
+        assert measured[target_id]["out_of_place"] == 0  # the check of task A8
+
+
+def test_layers_have_a_band_and_a_fallback_cut():
+    by_id = {layer["id"]: layer for layer in GUIDES["layers"]}
+    assert [by_id[k]["band"] for k in ("gaia", "catwise", "simbad", "skybot")] == [
+        "G", "W2", "V", "V"
+    ]  # fmt: skip
+    cuts = [g["markers"]["default_max_mag"].get("gaia") for g in BY_ID.values() if "markers" in g]
+    if cuts:
+        assert by_id["gaia"]["default_max_mag"] == min(c for c in cuts if c is not None)
+    assert by_id["simbad"]["default_max_mag"] is None
