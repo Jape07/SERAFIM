@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, onChange, t } from "./i18n.js?v=w3b";
+import { apply, lang, onChange, t } from "./i18n.js?v=w4";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -45,9 +45,9 @@ function langCode() {
   return document.documentElement.lang === "es" ? "es" : "en";
 }
 
+const MODES = ["sum", "difference", "all_seasons", "blink"];
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
-const diffBox = document.querySelector("#diff");
 const discardedBox = document.querySelector("#discarded");
 const image = document.querySelector("#frame");
 const marks = document.querySelector("#marks");
@@ -65,6 +65,10 @@ let blinkTimer = 0;
 let blinkOn = false;
 let blinkMs = 600;
 let blinkShowNow = true;
+let blinkPaused = false;
+let blinkKey = "";
+let blinkSlot = 0;
+let viewToken = 0;
 let gifCount = 4;
 let gifMs = 450;
 let gifTimer = 0;
@@ -73,7 +77,10 @@ let gifFrames = [];
 let gifBlob = null;
 let loadToken = 0;
 let detector = 1;
+let mode = "sum";
 let sumRows = [];
+let diffRows = [];
+let guide = null;
 const goldTargets = new Map();
 const cache = new Map();
 const BANDS = {
@@ -165,6 +172,226 @@ function buildSequence(rows, chosen) {
     .sort((a, b) => a.season - b.season);
 }
 
+function buildDifferences(rows, chosen) {
+  if (typeof chosen !== "number" || chosen < 1 || chosen > 6) return [];
+  return rows
+    .filter((row) => row.detector === chosen)
+    .sort((a, b) => {
+      const longA = a.season_b - a.season_a > 1 ? 1 : 0;
+      const longB = b.season_b - b.season_a > 1 ? 1 : 0;
+      return longA - longB || a.season_a - b.season_a || a.season_b - b.season_b;
+    });
+}
+
+function buildAllSeasons(rows, chosen) {
+  if (chosen === "color") return [];
+  const row = rows.find((item) => item.detector === chosen && item.season === 0);
+  return row ? [row] : [];
+}
+
+function sequenceFor(name) {
+  if (name === "difference") return buildDifferences(diffRows, detector);
+  if (name === "all_seasons") return buildAllSeasons(sumRows, detector);
+  return buildSequence(sumRows, detector);
+}
+
+function modeAvailable(name) {
+  const rows = sequenceFor(name);
+  return name === "blink" ? rows.length > 1 : rows.length > 0;
+}
+
+function parseMode(value) {
+  return MODES.includes(value) ? value : "sum";
+}
+
+function sumAt(chosen, season) {
+  return sumRows.find((row) => row.detector === chosen && row.season === season);
+}
+
+function seasonToken(frame = sequence[index]) {
+  if (!frame) return "";
+  if (mode === "difference") return `${frame.season_a}-${frame.season_b}`;
+  return String(frame.season);
+}
+
+function holdSeason() {
+  const frame = sequence[index];
+  if (!frame) return "";
+  if (mode === "difference") return String(frame.season_b);
+  return String(frame.season);
+}
+
+function indexFor(rows, token) {
+  if (!rows.length) return 0;
+  if (mode === "difference") {
+    const match = String(token ?? "").match(/^(\d+)-(\d+)$/);
+    if (match) {
+      const at = rows.findIndex((row) => row.season_a === Number(match[1]) && row.season_b === Number(match[2]));
+      if (at >= 0) return at;
+    }
+    const season = Number(token);
+    if (Number.isInteger(season) && season > 0) {
+      const consecutive = rows.findIndex((row) => row.season_b === season && row.season_b - row.season_a === 1);
+      if (consecutive >= 0) return consecutive;
+      const any = rows.findIndex((row) => row.season_a === season || row.season_b === season);
+      if (any >= 0) return any;
+    }
+    const span = rows.findIndex((row) => row.season_b - row.season_a > 1);
+    return span >= 0 ? span : 0;
+  }
+  const season = Number(token);
+  const at = rows.findIndex((row) => row.season === season);
+  return at >= 0 ? at : 0;
+}
+
+function blinkPair() {
+  const current = sequence[index];
+  if (!current) return [];
+  const partnerAt = index > 0 ? index - 1 : Math.min(1, sequence.length - 1);
+  const partner = sequence[partnerAt];
+  if (!partner || partner === current) return [current];
+  return [current, partner];
+}
+
+function shownDetector(frame) {
+  if (!frame) return detector;
+  if (frame.detector === "color") return "color";
+  return frame.detector ?? detector;
+}
+
+async function loadGuide() {
+  try {
+    const response = await fetch(new URL("../texts/targets.json", import.meta.url));
+    if (!response.ok) return null;
+    return response.json();
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function flagText(name) {
+  if (lang() === "es") {
+    const key = `flag_${name}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  const entry = guide?.flags?.find((item) => item.name === name);
+  return entry?.text || name;
+}
+
+function noteRows(frame) {
+  if (!frame) return [];
+  if (mode === "difference") {
+    return [sumAt(frame.detector, frame.season_a), sumAt(frame.detector, frame.season_b)].filter(Boolean);
+  }
+  if (mode === "blink") return blinkPair();
+  return [frame];
+}
+
+function flagNames(rows) {
+  const names = [];
+  for (const row of rows) {
+    for (const part of String(row.flags || "").split(",")) {
+      const name = part.trim();
+      if (name && name !== "SOURCE" && !names.includes(name)) names.push(name);
+    }
+  }
+  return names;
+}
+
+function rowSaturated(row) {
+  return row?.saturated === true || row?.saturated === 1;
+}
+
+function captionFor(frame) {
+  const shown = shownDetector(frame);
+  if (mode === "difference") {
+    return t("diffCaption", {
+      detector: detectorLabel(shown),
+      earlier: frame.season_a,
+      later: frame.season_b,
+      band: bandText(shown),
+    });
+  }
+  if (mode === "blink") {
+    const seasons = blinkPair().map((row) => row.season).sort((a, b) => a - b);
+    return t("blinkCaption", {
+      detector: detectorLabel(shown),
+      first: seasons[0],
+      second: seasons[seasons.length - 1],
+      band: bandText(shown),
+    });
+  }
+  return t(mode === "all_seasons" ? "allCaption" : "sumCaption", {
+    date: stamp(when(frame)),
+    detector: detectorLabel(shown),
+    band: bandText(shown),
+    frames: frame.n_frames ?? 0,
+  });
+}
+
+function altFor(frame, name) {
+  const shown = detectorLabel(shownDetector(frame));
+  if (mode === "difference") {
+    return t("diffAlt", { name, earlier: frame.season_a, later: frame.season_b, detector: shown });
+  }
+  if (mode === "blink") {
+    const seasons = blinkPair().map((row) => row.season).sort((a, b) => a - b);
+    return t("blinkAlt", { name, first: seasons[0], second: seasons[seasons.length - 1], detector: shown });
+  }
+  if (mode === "all_seasons") return t("allAlt", { name, detector: shown });
+  return t("sumAlt", { name, season: frame.season, detector: shown });
+}
+
+function showNotes(frame) {
+  const rows = noteRows(frame);
+  const badge = document.querySelector("#saturated-badge");
+  const saturated = rows.some(rowSaturated);
+  badge.hidden = !saturated;
+  badge.textContent = saturated ? (lang() === "es" ? t("saturatedBadge") : guide?.saturated_badge || t("saturatedBadge")) : "";
+  const host = document.querySelector("#flag-notes");
+  host.replaceChildren();
+  for (const name of flagNames(rows)) {
+    const line = document.createElement("p");
+    line.className = "hint";
+    line.textContent = t("flagLine", { name, text: flagText(name) });
+    host.append(line);
+  }
+}
+
+function stopBlink() {
+  clearInterval(blinkTimer);
+  blinkTimer = 0;
+  blinkKey = "";
+}
+
+function pairKey(pair) {
+  return pair.map((row) => row.png).join("|");
+}
+
+function armBlink(pair, pictures) {
+  const running = mode === "blink" && !blinkPaused && pair.length > 1 && pictures.every(Boolean);
+  if (!running) {
+    stopBlink();
+    if (mode !== "blink") playButton.textContent = timer ? t("pause") : t("play");
+    else playButton.textContent = t("play");
+    return;
+  }
+  playButton.textContent = t("pause");
+  const key = pairKey(pair);
+  if (blinkTimer && blinkKey === key) return;
+  stopBlink();
+  blinkKey = key;
+  blinkSlot = 0;
+  image.src = pictures[0].src;
+  blinkTimer = setInterval(() => {
+    blinkSlot = 1 - blinkSlot;
+    const picture = pictures[blinkSlot];
+    if (picture) image.src = picture.src;
+  }, 700);
+}
+
 function detectorLabel(value) {
   if (value === "color") return t("detectorColor");
   if (value === 0) return t("detectorAll");
@@ -178,17 +405,30 @@ function bandText(value) {
   return pair ? `${pair[0]}–${pair[1]} µm` : "—";
 }
 
+function colorPossible() {
+  const seasons = [...new Set(sumRows.filter((row) => row.season >= 1).map((row) => row.season))];
+  return seasons.some((season) => colorReady(sumRows, season));
+}
+
 function markDetectors() {
   const group = document.querySelector("#detectors");
   if (!group) return;
-  const season = sequence[index]?.season;
   for (const button of group.querySelectorAll("button")) {
     const value = button.dataset.detector;
     const selected = value === "color" ? detector === "color" : Number(value) === detector;
     button.setAttribute("aria-pressed", selected ? "true" : "false");
     button.disabled = value === "color"
-      ? !colorReady(sumRows, season)
+      ? !colorPossible()
       : !sumRows.some((row) => row.detector === Number(value) && row.season >= 1);
+  }
+}
+
+function markModes() {
+  const group = document.querySelector("#modes");
+  if (!group) return;
+  for (const button of group.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", button.dataset.mode === mode ? "true" : "false");
+    button.disabled = !modeAvailable(button.dataset.mode);
   }
 }
 
@@ -435,15 +675,24 @@ function fillCompare() {
   const frame = sequence[index];
   const baseline = sequence[0];
   if (!frame || !baseline) return;
+  let nowFrame = frame;
+  let thenFrame = baseline;
+  if (mode === "difference") {
+    nowFrame = sumAt(frame.detector, frame.season_b) || frame;
+    thenFrame = sumAt(frame.detector, frame.season_a) || frame;
+  } else if (mode === "blink") {
+    const pair = blinkPair();
+    nowFrame = pair[0];
+    thenFrame = pair[1] || pair[0];
+  } else if (blinkOn && !blinkShowNow) {
+    nowFrame = baseline;
+  }
   const now = document.querySelector("#cmp-now");
   const then = document.querySelector("#cmp-then");
-  const showingNow = !blinkOn || blinkShowNow;
-  const left = showingNow ? frame : baseline;
-  const leftIndex = left === frame ? index + (diffBox.checked ? 1 : 0) : 0;
-  now.src = skyFor(left, leftIndex);
-  then.src = skyFor(baseline, 0);
-  document.querySelector("#cmp-now-label").textContent = t(showingNow ? "photoCurrent" : "photoBlink", { date: fecha(when(left)) });
-  document.querySelector("#cmp-then-label").textContent = t("photoBase", { date: fecha(when(baseline)) });
+  now.src = skyFor(nowFrame);
+  then.src = skyFor(thenFrame);
+  document.querySelector("#cmp-now-label").textContent = t(blinkOn && !blinkShowNow ? "photoBlink" : "photoCurrent", { date: fecha(when(nowFrame)) });
+  document.querySelector("#cmp-then-label").textContent = t("photoBase", { date: fecha(when(thenFrame)) });
 
   const recentIds = new Set(hits.filter((hit) => hit.frame_id === frame.frame_id).map((hit) => hit.object_id));
   const baseIds = new Set(hits.filter((hit) => hit.frame_id === baseline.frame_id).map((hit) => hit.object_id));
@@ -467,48 +716,54 @@ function fillCompare() {
     : t("noRepeat");
   document.querySelector("#event-move-foot").textContent = biggest && biggest.arcsec >= 1 ? t("shiftMeasured") : t("noClearShift");
 
-  document.querySelector("#event-diff").textContent = frame.png_diff ? t("diffOn") : t("diffOff");
-  document.querySelector("#event-diff-foot").textContent = frame.png_diff ? t("availableShort") : t("unpublished");
-  const findings = [named.length > 0, Boolean(biggest && biggest.arcsec >= 1), Boolean(frame.png_diff)].filter(Boolean).length;
+  document.querySelector("#event-diff").textContent = mode === "difference" ? captionFor(frame) : t("diffOff");
+  document.querySelector("#event-diff-foot").textContent = mode === "difference" ? t("availableShort") : t("unpublished");
+  const findings = [named.length > 0, Boolean(biggest && biggest.arcsec >= 1), mode === "difference"].filter(Boolean).length;
   document.querySelector("#cmp-count").textContent = t(findings === 1 ? "finding" : "findings", { n: findings });
 }
 
 async function render() {
   const frame = sequence[index];
   if (!frame) return;
-  const picture = await loadImage(pngUrl(frame));
+  const token = ++viewToken;
+  const pair = mode === "blink" ? blinkPair() : [frame];
+  const pictures = await Promise.all(pair.map((row) => loadImage(pngUrl(row)).catch(() => null)));
+  if (token !== viewToken) return;
+  const picture = pictures[0];
   if (!picture) return;
-  image.src = picture.src;
+  const sameBlink = mode === "blink" && blinkTimer && blinkKey === pairKey(pair) && !blinkPaused;
+  if (!sameBlink) image.src = picture.src;
   const target = targetOf();
   const placed = goldTargets.get(activeTarget);
-  const shown = frame.detector === "color" ? "color" : frame.detector;
-  image.alt = t("sumAlt", { name: placed?.name || target.name, season: frame.season, detector: detectorLabel(shown) });
+  const shown = shownDetector(frame);
+  const name = placed?.name || target.name;
+  image.alt = altFor(frame, name);
   marks.replaceChildren();
-  caption.textContent = t("sumCaption", {
-    date: stamp(when(frame)),
-    detector: detectorLabel(shown),
-    band: bandText(shown),
-    frames: frame.n_frames ?? 0,
-  });
+  caption.textContent = captionFor(frame);
+  showNotes(frame);
   const readout = document.querySelector("#cnn-out");
   if (activeTarget === "wise_0855" && shown >= 1 && shown <= 4) readout.textContent = t("wiseNeighbor");
   else if (activeTarget === "wise_0855") readout.textContent = t("wiseGuide");
   else if (!selectedId) readout.textContent = t("cnnIdle");
   slider.value = String(index);
-  document.querySelector("#sector").textContent = placed?.name || target.name;
+  slider.max = String(Math.max(sequence.length - 1, 0));
+  document.querySelector("#sector").textContent = name;
   document.querySelector("#sky-ra").textContent = hms(placed?.ra_now ?? target.ra);
   document.querySelector("#sky-dec").textContent = dms(placed?.dec_now ?? target.dec);
   fillEpochs();
   const url = new URL(location.href);
   url.searchParams.set("target", activeTarget);
   url.searchParams.set("detector", String(detector));
-  url.searchParams.set("season", String(frame.season));
+  url.searchParams.set("season", seasonToken(frame));
+  url.searchParams.set("mode", mode);
   url.searchParams.delete("region");
   url.searchParams.delete("frame");
   history.replaceState(null, "", url);
   fillPanel();
   fillCompare();
   markDetectors();
+  markModes();
+  armBlink(pair, pictures);
   loadImage(pngUrl(sequence[index - 1]));
   loadImage(pngUrl(sequence[index + 1]));
 }
@@ -522,8 +777,29 @@ function move(step) {
 function setPlaying(playing) {
   clearInterval(timer);
   timer = 0;
+  if (mode === "blink") return;
   playButton.textContent = playing ? t("pause") : t("play");
   if (playing) timer = setInterval(() => move(1), 900);
+}
+
+function togglePlay() {
+  if (mode === "blink") {
+    blinkPaused = !blinkPaused;
+    render();
+    return;
+  }
+  setPlaying(!timer);
+}
+
+function applyView(season) {
+  if (!modeAvailable(mode)) mode = modeAvailable("sum") ? "sum" : mode;
+  sequence = sequenceFor(mode);
+  index = indexFor(sequence, season);
+  slider.max = String(Math.max(sequence.length - 1, 0));
+  markDetectors();
+  markModes();
+  restartPreview();
+  return render();
 }
 
 function sample(list, count) {
@@ -658,24 +934,21 @@ async function focusObject(object) {
 async function openRegion(targetId, options = {}) {
   const token = ++loadToken;
   setPlaying(false);
+  stopBlink();
   if (!goldTargets.has(targetId) && !TARGETS.some((item) => item.id === targetId)) return;
   activeTarget = targetId;
-  const rows = await sums(targetId);
+  const [rows, diffs] = await Promise.all([sums(targetId), differences(targetId)]);
   if (token !== loadToken) return;
   sumRows = rows;
+  diffRows = diffs;
   hits = [];
   byObject = new Map();
   selectedId = "";
   detector = options.detector ?? detector;
-  sequence = buildSequence(sumRows, detector);
-  const season = Number(options.season);
-  const at = sequence.findIndex((row) => row.season === season);
-  index = at >= 0 ? at : 0;
-  slider.max = String(Math.max(sequence.length - 1, 0));
+  if (options.mode) mode = parseMode(options.mode);
+  blinkPaused = false;
   renderRegions();
-  markDetectors();
-  restartPreview();
-  await render();
+  await applyView(options.season);
   if (options.scroll) document.querySelector("#visor").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -685,13 +958,23 @@ function choose(group, pressed) {
   }
 }
 
-playButton.addEventListener("click", () => setPlaying(!timer));
+playButton.addEventListener("click", () => togglePlay());
 slider.addEventListener("input", () => {
   setPlaying(false);
   index = Number(slider.value);
   render();
 });
-diffBox.addEventListener("change", () => render());
+document.querySelector("#modes").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button || button.disabled) return;
+  const next = button.dataset.mode;
+  if (!next || next === mode) return;
+  setPlaying(false);
+  const season = mode === "difference" && next !== "difference" ? holdSeason() : seasonToken();
+  mode = next;
+  blinkPaused = false;
+  applyView(season);
+});
 document.querySelector("#detectors").addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
@@ -699,15 +982,15 @@ document.querySelector("#detectors").addEventListener("click", (event) => {
   const next = value === "color" ? "color" : Number(value);
   if (next === detector) return;
   setPlaying(false);
-  const season = sequence[index]?.season;
+  let season = seasonToken();
+  if ((next === "color" || next === 0) && mode === "difference") {
+    season = holdSeason();
+    mode = "sum";
+  }
+  if (next === "color" && mode === "all_seasons") mode = "sum";
   detector = next;
-  sequence = buildSequence(sumRows, detector);
-  const at = sequence.findIndex((row) => row.season === season);
-  index = at >= 0 ? at : 0;
-  slider.max = String(Math.max(sequence.length - 1, 0));
-  markDetectors();
-  restartPreview();
-  render();
+  blinkPaused = false;
+  applyView(season);
 });
 discardedBox.addEventListener("change", () => render());
 document.querySelector("#blink").addEventListener("click", () => {
@@ -780,7 +1063,7 @@ window.addEventListener("keydown", (event) => {
     move(-1);
   } else if (event.key === " ") {
     event.preventDefault();
-    setPlaying(!timer);
+    togglePlay();
   }
 });
 
@@ -789,7 +1072,7 @@ onChange(() => {
   apply();
   renderRegions();
   if (regionList.length) renderCatalog();
-  playButton.textContent = timer ? t("pause") : t("play");
+  playButton.textContent = mode === "blink" && !blinkPaused ? t("pause") : timer ? t("pause") : t("play");
   document.querySelector("#blink").textContent = blinkOn ? t("blinkPause") : t("blink");
   if (sequence.length) {
     updateGifLabel();
@@ -801,8 +1084,9 @@ onChange(() => {
 
 try {
   const params = new URLSearchParams(location.search);
-  const [found, info] = await Promise.all([targets(), meta()]);
+  const [found, info, texts] = await Promise.all([targets(), meta(), loadGuide()]);
   regionList = found;
+  guide = texts;
   goldTargets.clear();
   for (const row of found) goldTargets.set(row.target_id, row);
   renderCatalog();
@@ -810,10 +1094,11 @@ try {
   const match = found.find((row) => row.target_id === wanted) || found[0];
   if (match) activeTarget = match.target_id;
   detector = parseDetector(params.get("detector"), activeTarget);
+  mode = parseMode(params.get("mode"));
   document.querySelector("#updated").textContent = info?.run_date_utc
     ? t("tablesLoaded", { date: info.run_date_utc })
     : t("tablesLoaded", { date: "—" });
-  if (match) await openRegion(match.target_id, { detector, season: params.get("season") });
+  if (match) await openRegion(match.target_id, { detector, season: params.get("season"), mode });
   if (location.hash) {
     const place = document.querySelector(location.hash);
     if (place) place.scrollIntoView();

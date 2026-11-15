@@ -425,6 +425,8 @@ html[data-theme="light"] .mini { background: white; }
 
 .gif-controls { padding: 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
+#modes.choice { grid-template-columns: repeat(2, 1fr); margin-top: 0.7rem; }
+#flag-notes p { margin: 0.15rem 0 0; }
 .choice button {
   border: 1px solid var(--line-strong);
   background: transparent;

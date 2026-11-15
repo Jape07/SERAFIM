@@ -117,9 +117,17 @@
               <button type="button" data-detector="0" data-i18n="detectorAll">All</button>
               <button type="button" data-detector="color" data-i18n="detectorColor">Color</button>
             </div>
+            <div class="choice" id="modes" role="group" data-i18n="modeLabel" data-i18n-attr="aria-label" aria-label="Mode">
+              <button type="button" data-mode="sum" data-i18n="modeSum">One season</button>
+              <button type="button" data-mode="difference" data-i18n="modeDifference">Difference</button>
+              <button type="button" data-mode="all_seasons" data-i18n="modeAll">All seasons</button>
+              <button type="button" data-mode="blink" data-i18n="modeBlink">Blink</button>
+            </div>
             <label class="label" for="slider" data-i18n="timeline">Timeline</label>
             <input class="slider" id="slider" type="range" min="0" max="0" value="0" aria-valuemin="0">
             <p class="hint" id="caption"></p>
+            <p class="note" id="saturated-badge" hidden></p>
+            <div id="flag-notes"></div>
             <div class="deltas">
               <div class="mini"><span data-i18n="motion">Motion</span><strong id="move-read">—</strong></div>
               <div class="mini"><span data-i18n="wavelength">Wavelength</span><strong id="wave-read">—</strong></div>
@@ -130,7 +138,6 @@
               <a class="ghost" href="#comparador"><span class="material-symbols-outlined">compare_arrows</span> <span data-i18n="compare">Compare</span></a>
             </div>
             <div class="checks">
-              <label><input id="diff" type="checkbox"> <span data-i18n="difference">Difference</span></label>
               <label><input id="discarded" type="checkbox" checked> <span data-i18n="discarded">Discarded</span></label>
             </div>
           </div>
@@ -316,6 +323,6 @@
       document.dispatchEvent(new Event("serafim-lang"));
     });
   </script>
-  <script type="module" src="js/app.js?v=w3b"></script>
+  <script type="module" src="js/app.js?v=w4"></script>
 </body>
 </html>
