@@ -46,7 +46,7 @@ SERAFIM/
 │  ├─ bronze/               download from IRSA (data engineering)
 │  ├─ silver/               cleaning, alignment, subtraction and detection (data engineering)
 │  ├─ gold/                 tables, PNG and export (data engineering)
-│  ├─ validation/           targets.py, catalogs.py, layers.py and status.py (AI & validation)
+│  ├─ validation/           targets, catalogs, layers, guides and status (AI & validation)
 │  ├─ ai/                   predict.py, CNN inference with ONNX (AI & validation)
 │  ├─ contract.py           gold schemas (whole team)
 │  └─ cli.py                python -m serafim
@@ -56,7 +56,7 @@ SERAFIM/
 │  ├─ css/styles.css
 │  ├─ js/data.js, js/app.js
 │  ├─ img/                  SPHEREx reference images (NASA/JPL-Caltech)
-│  ├─ texts/examples.json   guided example texts (written by AI & validation)
+│  ├─ texts/targets.json    guides of the 5 targets (python -m serafim.validation.guides)
 │  └─ gold/                 local copy of gold (git-ignored)
 ├─ config/targets.yaml      the 5 challenge targets and every pipeline setting
 ├─ models/                  final ONNX model (AI & validation)
@@ -98,7 +98,7 @@ The role documents are in Spanish; everything in this repo is in English.
 | `restar()`, `recorte()` | `subtract()`, `cutout()` |
 | `visor.html`, `catalogo.html`, `acerca.html` | `viewer.html`, `catalog.html`, `about.html` |
 | `css/estilos.css`, `js/datos.js`, `js/visor.js`, `js/inicio.js`, `js/catalogo.js` | `css/styles.css`, `js/data.js`, `js/app.js` |
-| `textos/ejemplos.json` | `texts/examples.json` |
+| `textos/objetivos.json` | `texts/targets.json` |
 | `publicar.yml` | `publish.yml` |
 | `polo`, `asteroide`, `estrella variable` | `pole`, `asteroid`, `variable_star` |
 | `regiones`, `cuadros`, `detecciones`, `objetos` | `regions`, `frames`, `detections`, `objects` |
