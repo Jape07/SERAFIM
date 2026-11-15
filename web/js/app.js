@@ -2298,6 +2298,14 @@ onChange(() => {
   }
 });
 
+// While DuckDB and the tables come in, the viewer says what it is waiting for; the first
+// render then writes the target's name in #sector.
+window.addEventListener("serafim:loading", (event) => {
+  const { stage, mb } = event.detail || {};
+  if (stage === "engine") put("#sector", t("loadingEngine", { mb }));
+  else if (stage === "tables") put("#sector", t("loadingTables"));
+});
+
 try {
   const params = new URLSearchParams(location.search);
   const [found, info, texts, foundDiscoveries] = await Promise.all([
@@ -2351,6 +2359,17 @@ try {
 } catch (error) {
   put("#updated", t("tablesDown"));
   put("#catalog-status", t("tablesDown"));
-  put("#cnn-out", t("tablesDown"));
+  put("#sector", t("tablesDown"));
+  const readout = document.querySelector("#cnn-out");
+  if (readout) {
+    // Usually a slow connection: DuckDB (35 MB) did not arrive in time. One click tries again.
+    readout.replaceChildren(document.createTextNode(`${t("tablesDown")} `));
+    const again = document.createElement("button");
+    again.type = "button";
+    again.className = "primary";
+    again.textContent = t("tryAgain");
+    again.addEventListener("click", () => location.reload());
+    readout.append(again);
+  }
   console.error(error);
 }
