@@ -68,6 +68,7 @@ RESIDUAL_SATURATED_PX = 4.0  # halo lobes around a saturated star that does not 
 CATALOG_ORDER = {"simbad": 0, "gaia": 1, "catwise": 2}  # who names a Known dipole first
 TARGET_PX = 8.0  # lobes this close to the grid center belong to the target (for the checks)
 
+CNN_SUMMARY = targets.ROOT / "docs" / "dipole_cnn.json"  # threshold from training/evaluate.py
 KNOWN, DISCARDED, CANDIDATE = "Known", "Discarded", "Unidentified candidate"
 SYMBOL = {"pass": "✅", "warn": "⚠️", "fail": "❌"}
 _DIFFERENCE_NAME = re.compile(r"d(\d)_s(\d+)-s(\d+)\.npz$")
@@ -255,6 +256,29 @@ def status(dipole: dict, sources: pd.DataFrame, mask: np.ndarray, shape: tuple[i
 # --- Disk -------------------------------------------------------------------------------------
 
 
+def cnn_scores(found: pd.DataFrame, sum_a: dict, sum_b: dict) -> np.ndarray:
+    """p_dipole of the CNN (stage 2) at the middle of each dipole. NaN without the model and
+    outside its domain: a dipole next to a saturated core (docs/dipole_cnn.md: on saturated
+    stars it does not tell one that moves from one that does not)."""
+    from serafim.ai import predict, stamps
+
+    out = np.full(len(found), np.nan)
+    inside = ~found["halo"].astype(bool).to_numpy() if len(found) else np.zeros(0, bool)
+    if not inside.any() or not predict.available():
+        return out
+    channels, _ = stamps.cube_from_sums(sum_a, sum_b)
+    cut = [stamps.cut(channels, (r.x_from + r.x_to) / 2, (r.y_from + r.y_to) / 2)
+           for r in found[inside].itertuples()]  # fmt: skip
+    out[inside] = predict.predict(np.stack(cut))
+    return out
+
+
+def cnn_threshold() -> float | None:
+    if not CNN_SUMMARY.exists():
+        return None
+    return float(json.loads(CNN_SUMMARY.read_text(encoding="utf-8"))["threshold"])
+
+
 def difference_cells(target_id: str, root: Path | None = None) -> list[tuple[int, int, int]]:
     from serafim.silver.store import silver_dir
 
@@ -278,6 +302,9 @@ def target_dipoles(target_id: str, layers: pd.DataFrame, root: Path | None = Non
         mask = np.asarray(d["mask"], bool)
         saturated = np.asarray(d["saturated"], bool)
         found = find_dipoles(d["difference"], mask, saturated)
+        found["p_dipole"] = cnn_scores(
+            found, load_sum(target_id, detector, a, root), load_sum(target_id, detector, b, root)
+        )
         sources = catalog_moves(layers, wcs, a, b)
         mjd_a = float(load_sum(target_id, detector, a, root)["mean_mjd"])
         mjd_b = float(load_sum(target_id, detector, b, root)["mean_mjd"])
@@ -385,19 +412,35 @@ def report(found: dict[str, pd.DataFrame], names: dict[str, str], tests: list) -
         lines.append(f"| {names[target_id]} | {cells} | {len(rows)} | {count.get(KNOWN, 0)} | "
                      f"{count.get(DISCARDED, 0)} | {count.get(CANDIDATE, 0)} |")  # fmt: skip
     every = pd.concat([r for r in found.values() if len(r)], ignore_index=True)
+    threshold = cnn_threshold()
+    if threshold is not None and len(every) and every["p_dipole"].notna().any():
+        known = every[(every["status"] == KNOWN) & every["p_dipole"].notna()]
+        candidates = every[(every["status"] == CANDIDATE) & every["p_dipole"].notna()]
+        agree = int((known["p_dipole"] >= threshold).sum())
+        moving = int((candidates["p_dipole"] >= threshold).sum())
+        lines += [
+            "",
+            f"**The CNN (stage 2, experimental, [docs/dipole_cnn.md](dipole_cnn.md), p_dipole ≥ "
+            f"{threshold:.2f})** only judges dipoles without saturated pixels: it agrees with "
+            f"{agree} of those {len(known)} Known dipoles and says {moving} of the "
+            f"{len(candidates)} unidentified candidates look like a moving source. It never "
+            "changes a status.",
+        ]
     for title, state in (("Known", KNOWN), ("Unidentified candidates", CANDIDATE)):
         part = every[every["status"] == state] if len(every) else every
         lines += ["", f"## {title}", ""]
         if part.empty:
             lines.append("None.")
             continue
-        lines += ["| Target | Detector | Seasons | From (x, y) | Lobes apart (px) | S/N | Reason |",
-                  "| --- | --- | --- | --- | --- | --- | --- |"]  # fmt: skip
+        lines += ["| Target | Detector | Seasons | From (x, y) | Lobes apart (px) | S/N | "
+                  "CNN p_dipole | Reason |",
+                  "| --- | --- | --- | --- | --- | --- | --- | --- |"]  # fmt: skip
         for r in part.sort_values(["target_id", "detector", "season_a", "season_b"]).itertuples():
             lines.append(
                 f"| {names[r.target_id]} | {r.detector} | {r.season_b} − {r.season_a} | "
                 f"({r.x_from:.1f}, {r.y_from:.1f}) | {r.separation_px:.2f}"
-                f"{' (halo)' if r.halo else ''} | {r.snr:.0f} | {r.reason} |"
+                f"{' (halo)' if r.halo else ''} | {r.snr:.0f} | "
+                f"{'—' if np.isnan(r.p_dipole) else f'{r.p_dipole:.2f}'} | {r.reason} |"
             )
     discarded = every[every["status"] == DISCARDED] if len(every) else every
     if len(discarded):
@@ -471,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     args.report.write_text(report(found, names, tests), encoding="utf-8", newline="\n")
     every = pd.concat([r for r in found.values() if len(r)], ignore_index=True)
     keep = ["target_id", "detector", "season_a", "season_b", "ra_from", "dec_from", "ra_to",
-            "dec_to", "separation_px", "halo", "snr", "status", "reason"]  # fmt: skip
+            "dec_to", "separation_px", "halo", "snr", "p_dipole", "status", "reason"]  # fmt: skip
     summary = {
         "checks": [{"state": state, "text": text} for state, text in tests],
         "dipoles": json.loads(

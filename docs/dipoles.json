@@ -34,6 +34,7 @@
       "separation_px": 5.060435,
       "halo": true,
       "snr": 3285.98877,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -49,6 +50,7 @@
       "separation_px": 4.720744,
       "halo": true,
       "snr": 833.427307,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -64,6 +66,7 @@
       "separation_px": 4.153677,
       "halo": true,
       "snr": 1493.09436,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -79,6 +82,7 @@
       "separation_px": 6.57594,
       "halo": true,
       "snr": 2660.140137,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -94,6 +98,7 @@
       "separation_px": 5.226645,
       "halo": true,
       "snr": 3637.398926,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -109,6 +114,7 @@
       "separation_px": 5.823728,
       "halo": true,
       "snr": 6613.196289,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -124,6 +130,7 @@
       "separation_px": 4.950008,
       "halo": true,
       "snr": 2751.450684,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -139,6 +146,7 @@
       "separation_px": 5.078087,
       "halo": true,
       "snr": 13599.19043,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -154,6 +162,7 @@
       "separation_px": 6.130062,
       "halo": true,
       "snr": 14275.891602,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -169,6 +178,7 @@
       "separation_px": 5.121177,
       "halo": true,
       "snr": 11267.266602,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -184,6 +194,7 @@
       "separation_px": 4.156738,
       "halo": true,
       "snr": 9699.62207,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -199,6 +210,7 @@
       "separation_px": 4.697418,
       "halo": true,
       "snr": 10225.015625,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -214,6 +226,7 @@
       "separation_px": 4.420365,
       "halo": true,
       "snr": 5347.858887,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -229,6 +242,7 @@
       "separation_px": 4.538814,
       "halo": true,
       "snr": 2450.55249,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -244,6 +258,7 @@
       "separation_px": 3.635666,
       "halo": true,
       "snr": 5837.927734,
+      "p_dipole": null,
       "status": "Known",
       "reason": "NAME Barnard's star (simbad)"
     },
@@ -259,6 +274,7 @@
       "separation_px": 2.475374,
       "halo": false,
       "snr": 294.361603,
+      "p_dipole": 0.999946,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -274,6 +290,7 @@
       "separation_px": 2.468098,
       "halo": false,
       "snr": 64.407524,
+      "p_dipole": 0.994841,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -289,6 +306,7 @@
       "separation_px": 2.347154,
       "halo": false,
       "snr": 152.199173,
+      "p_dipole": 0.990841,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -304,6 +322,7 @@
       "separation_px": 2.4664,
       "halo": false,
       "snr": 266.914886,
+      "p_dipole": 0.999951,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -319,6 +338,7 @@
       "separation_px": 2.436851,
       "halo": false,
       "snr": 193.740036,
+      "p_dipole": 0.989783,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -334,6 +354,7 @@
       "separation_px": 2.353996,
       "halo": false,
       "snr": 69.349274,
+      "p_dipole": 0.932035,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -349,6 +370,7 @@
       "separation_px": 2.731438,
       "halo": false,
       "snr": 569.479431,
+      "p_dipole": 0.341298,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -364,6 +386,7 @@
       "separation_px": 2.631504,
       "halo": false,
       "snr": 529.523621,
+      "p_dipole": 0.984762,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -379,6 +402,7 @@
       "separation_px": 2.718254,
       "halo": false,
       "snr": 52.488674,
+      "p_dipole": 0.171082,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -394,6 +418,7 @@
       "separation_px": 4.681163,
       "halo": true,
       "snr": 6064.494629,
+      "p_dipole": null,
       "status": "Known",
       "reason": "* eps Ind (simbad)"
     },
@@ -409,6 +434,7 @@
       "separation_px": 2.615041,
       "halo": false,
       "snr": 174.672699,
+      "p_dipole": 0.996777,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -424,6 +450,7 @@
       "separation_px": 2.497283,
       "halo": false,
       "snr": 86.147568,
+      "p_dipole": 0.804775,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -439,6 +466,7 @@
       "separation_px": 2.768379,
       "halo": false,
       "snr": 41.642357,
+      "p_dipole": 0.882536,
       "status": "Known",
       "reason": "* eps Ind B (simbad)"
     },
@@ -454,6 +482,7 @@
       "separation_px": 2.722007,
       "halo": false,
       "snr": 29.944733,
+      "p_dipole": 0.080398,
       "status": "Unidentified candidate",
       "reason": "No moving source of Gaia, CatWISE or SIMBAD there"
     },
@@ -469,6 +498,7 @@
       "separation_px": 2.929858,
       "halo": false,
       "snr": 14.794104,
+      "p_dipole": 0.296753,
       "status": "Unidentified candidate",
       "reason": "No moving source of Gaia, CatWISE or SIMBAD there"
     }
