@@ -19,9 +19,11 @@ permissions:
   pages: write
   id-token: write
 
+# Same group as the deploy job of publish.yml: two deploys to Pages never overlap, and a
+# web-only deploy never steps on a gold deploy that is in flight.
 concurrency:
-  group: deploy-web
-  cancel-in-progress: true
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:

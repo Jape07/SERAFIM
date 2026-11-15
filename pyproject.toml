@@ -31,6 +31,7 @@ dependencies = [
 dev = [
     "pytest==9.2.0",
     "ruff==0.17.5",
+    "websocket-client==1.9.2",  # tests/web/check_site.py drives a headless browser over CDP
 ]
 # AI & validation only: training, hyperparameter search and ONNX export.
 # The pipeline itself never needs these (it runs the model with onnxruntime).

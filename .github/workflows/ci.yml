@@ -27,3 +27,9 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest
+      # The site in a real browser (Chrome comes with ubuntu-latest), on simulated gold: the
+      # viewer must load an image, keep every control app.js handles, and throw nothing.
+      - name: Simulated gold for the site check
+        run: python -m serafim mock --all-targets
+      - name: Site check
+        run: python tests/web/check_site.py --gold data/gold
