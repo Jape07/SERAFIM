@@ -1,13 +1,30 @@
-"""Bronze layer: SPHEREx cutouts from IRSA, exactly as they arrive.
+"""Bronze layer: SPHEREx cutouts from IRSA, exactly as they arrive (task D3).
 
-For each target in config/targets.yaml, search with ``Irsa.query_sia`` around
-its ``ra_now``/``dec_now`` (position corrected for proper motion) in
-``settings.collections``. When the same exposure is in several collections, the
-first one in that list wins (DR1 over QR3). Each page asks for a few rows: a wide
-cone or a large MAXREC makes the IRSA proxy return HTTP 502. The cutout itself
-is ``settings.cutout_size_deg``.
+For each target in config/targets.yaml:
 
-A file already on disk is not downloaded again.
+1. `spherex_frames()` (AI & validation) lists every SPHEREx exposure that covers the target's
+   position today (`ra_now`, `dec_now`): one SIA query per collection in `settings.collections`,
+   and when an exposure is in several, the first collection wins (DR1 over QR3).
+2. `split_seasons()` numbers the season of every frame on that COMPLETE list, before any cap,
+   so the numbers are the same as the ones AI wrote in config/targets.yaml.
+3. `select_frames()` keeps at most `settings.max_frames_per_season_detector` frames in each
+   (season, detector) cell, spread in time (not the oldest ones).
+4. The cutout of each kept frame (`settings.cutout_size_deg`, or the target's own
+   `cutout_size_deg`) is saved to `data/bronze/<target>/<obs_id>.fits` exactly as IRSA sends it,
+   EPSF included. At most 8 at a time; a failed request is retried after 5, 10 and 15 s.
+5. `data/bronze/manifest.parquet` says what is on disk, one row per cutout:
+
+       target_id, obs_id, collection  as in IRSA
+       detector      1 to 6
+       season        1 or more, from step 2
+       t_mid_mjd     middle of the exposure
+       ra, dec       center of the cutout (the target today)
+       size_deg      side of the cutout
+       path          relative to the repo root, e.g. data/bronze/barnard/<obs_id>.fits
+
+A file already on disk is not downloaded again, so a second run downloads nothing. The
+manifest is rebuilt from the IRSA list every run (seasons can move when new frames arrive)
+and only lists files that exist.
 """
 
 from __future__ import annotations
@@ -19,20 +36,23 @@ from io import BytesIO
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 from serafim.config import ROOT, load_config
+from serafim.validation.targets import spherex_frames, split_seasons
 
 log = logging.getLogger("serafim.bronze")
 
-# Images that cover this point. A wider POS is what makes the proxy return 502.
-SEARCH_RADIUS_ARCSEC = 1.0
-# Four rows per page. maxrec of 8 or more often comes back as HTTP 502.
-PAGE_SIZE = 4
-QUERY_TIMEOUT_S = 40
+MAX_PARALLEL = 8  # never more than 8 downloads at once: be nice to IRSA
+DEFAULT_CAP = 12
+DEFAULT_SIZE_DEG = 0.25
+RETRY_STEP_S = 5  # waits 5, 10, 15 s: IRSA answers 502/503 now and then
 DOWNLOAD_TIMEOUT_S = 120
 USER_AGENT = "Mozilla/5.0"
 REQUIRED_HDUS = ("IMAGE", "FLAGS", "VARIANCE", "ZODI", "WCS-WAVE")
@@ -42,8 +62,9 @@ MANIFEST_SCHEMA = pa.schema(
         pa.field("target_id", pa.string()),
         pa.field("obs_id", pa.string()),
         pa.field("collection", pa.string()),
-        pa.field("band", pa.string()),
-        pa.field("t_min", pa.float64()),
+        pa.field("detector", pa.int32()),
+        pa.field("season", pa.int32()),
+        pa.field("t_mid_mjd", pa.float64()),
         pa.field("ra", pa.float64()),
         pa.field("dec", pa.float64()),
         pa.field("size_deg", pa.float64()),
@@ -53,9 +74,10 @@ MANIFEST_SCHEMA = pa.schema(
 
 
 class ArchiveError(RuntimeError):
-    """IRSA did not deliver a usable cutout."""
+    """IRSA did not deliver a usable answer."""
 
 
+# --- Manifest -----------------------------------------------------------------------------
 def manifest_path(root: Path | None = None) -> Path:
     return (root or ROOT) / "data" / "bronze" / "manifest.parquet"
 
@@ -70,181 +92,199 @@ def read_manifest(root: Path | None = None) -> list[dict]:
 def write_manifest(rows: list[dict], root: Path | None = None) -> None:
     path = manifest_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(pa.Table.from_pylist(rows, schema=MANIFEST_SCHEMA), path)
+    ordered = sorted(rows, key=lambda r: (r["target_id"], r.get("t_mid_mjd") or 0.0, r["obs_id"]))
+    pq.write_table(pa.Table.from_pylist(ordered, schema=MANIFEST_SCHEMA), path)
 
 
-def fits_has_products(payload: bytes) -> bool:
-    """True when the cutout is a SPHEREx MEF with the extensions D2 requires."""
-    if not payload.startswith(b"SIMPLE"):
-        return False
-    try:
-        with fits.open(BytesIO(payload)) as hdul:
-            names = {hdu.name.strip() for hdu in hdul}
-    except OSError:
-        return False
-    return all(name in names for name in REQUIRED_HDUS)
-
-
-def choose_exposures(
-    rows: list[dict], limit: int, priority: list[str] | None = None
-) -> list[dict]:
-    """One row per obs_id, oldest first, cut at ``limit``.
-
-    When an exposure is in several collections, the one listed first in
-    ``priority`` wins; without a list, DR1 wins over QR3.
-    """
-
-    def rank(collection: str) -> int:
-        if priority and collection in priority:
-            return priority.index(collection)
-        return _dr1_rank(collection) + (len(priority) if priority else 0)
-
-    best: dict[str, dict] = {}
-    for row in rows:
-        current = best.get(row["obs_id"])
-        if current is None or rank(row["collection"]) < rank(current["collection"]):
-            best[row["obs_id"]] = row
-    ordered = sorted(best.values(), key=lambda row: (float(row.get("t_min") or 0), row["obs_id"]))
-    return ordered[:limit]
-
-
+# --- Settings -----------------------------------------------------------------------------
 def collections_for(settings: dict) -> list[str]:
     """SIA collections in priority order, as listed in config/targets.yaml."""
     return [str(name) for name in settings.get("collections") or []]
 
 
+def retry_waits(retries: int) -> tuple[int, ...]:
+    """Seconds to wait before each retry: 3 retries wait 5, 10 and 15 s."""
+    return tuple(RETRY_STEP_S * (n + 1) for n in range(max(0, retries)))
+
+
+def parallel_workers(settings: dict) -> int:
+    """Downloads at once: `settings.parallel_downloads`, but never more than MAX_PARALLEL."""
+    wanted = int(settings.get("parallel_downloads") or MAX_PARALLEL)
+    return max(1, min(wanted, MAX_PARALLEL))
+
+
+def cutout_size_deg(target: dict, settings: dict) -> float:
+    """Side of the cutout: the target's own `cutout_size_deg`, else the one in `settings`."""
+    return float(
+        target.get("cutout_size_deg") or settings.get("cutout_size_deg") or DEFAULT_SIZE_DEG
+    )
+
+
+# --- Choosing frames: pure functions, no network and no disk ------------------------------
+def spread_in_time(times, count: int) -> np.ndarray:
+    """Positions (sorted) of `count` frames spread over the time span.
+
+    For each of `count` equally spaced instants between the first and the last frame, the
+    nearest frame that is still free is taken, so the ends are always in and a visit with many
+    frames does not use up the whole cap. With `count` or fewer frames, all of them.
+    """
+    t = np.asarray(times, dtype=float)
+    if count >= t.size:
+        return np.arange(t.size)
+    low, high = float(t.min()), float(t.max())
+    instants = np.linspace(low, high, count) if count > 1 else np.array([(low + high) / 2])
+    free = np.ones(t.size, dtype=bool)
+    chosen = []
+    for instant in instants:
+        nearest = int(np.argmin(np.where(free, np.abs(t - instant), np.inf)))
+        chosen.append(nearest)
+        free[nearest] = False
+    return np.sort(chosen)
+
+
+def select_frames(frames: pd.DataFrame, cap: int) -> pd.DataFrame:
+    """At most `cap` frames per (season, detector), spread in time, in time order.
+
+    `frames` needs `season`, `detector`, `t_mid_mjd` and `obs_id`. The choice depends only on
+    the frames, so the same list always gives the same frames.
+    """
+    cap = max(1, int(cap))
+    kept = []
+    for _, cell in frames.groupby(["season", "detector"], sort=True):
+        cell = cell.sort_values(["t_mid_mjd", "obs_id"])
+        kept.append(cell.iloc[spread_in_time(cell["t_mid_mjd"].to_numpy(), cap)])
+    if not kept:
+        return frames.iloc[0:0].reset_index(drop=True)
+    return pd.concat(kept).sort_values(["t_mid_mjd", "obs_id"], ignore_index=True)
+
+
+# --- Download -----------------------------------------------------------------------------
 def download(
     target_id: str | None = None,
     *,
     root: Path | None = None,
-    query=None,
+    frames=None,
     fetch=None,
 ) -> int:
-    """Download missing cutouts. Return how many new files were written.
+    """Download the missing cutouts and rewrite the manifest. Return how many files are new.
 
-    ``query`` and ``fetch`` are injection points for tests. The real ones call
-    IRSA. An exposure that is already a FITS file under ``data/bronze`` is skipped.
+    `frames(center, collections)` and `fetch(job)` are injection points for tests; the real
+    ones are `spherex_frames()` and `fetch_cutout()`, which call IRSA.
+
+    Raises:
+        ArchiveError: if a search failed (after the other targets were done) or if there is
+            not a single cutout on disk for the targets asked for.
     """
     root = root or ROOT
     config = load_config(root / "config" / "targets.yaml")
     settings = config.get("settings") or {}
-    limit = int(settings.get("max_frames_per_target") or 60)
-    attempts = int(settings.get("retries") or 3)
-    workers = int(settings.get("parallel_downloads") or 8)
-    size_deg = float(settings.get("cutout_size_deg") or 0.25)
-    collections = collections_for(settings)
-    query = query or query_collection
-    fetch = fetch or fetch_cutout
-
-    previous = read_manifest(root)
-    by_key = {(row["target_id"], row["obs_id"]): row for row in previous}
-    new_rows: list[dict] = []
-    kept = 0
+    context = {
+        "root": root,
+        "settings": settings,
+        "cap": int(settings.get("max_frames_per_season_detector") or DEFAULT_CAP),
+        "waits": retry_waits(int(settings.get("retries", 3))),
+        "workers": parallel_workers(settings),
+        "find": frames or spherex_frames,
+        "fetch": fetch or fetch_cutout,
+    }
+    rows = {(row["target_id"], row["obs_id"]): row for row in read_manifest(root)}
+    downloaded = on_disk = 0
+    failed: list[str] = []
 
     for target in _targets(config, target_id):
         name = str(target["id"])
-        ra, dec = float(target["ra_now"]), float(target["dec_now"])
-        on_disk = {
-            obs_id
-            for (target_name, obs_id), row in by_key.items()
-            if target_name == name and (root / str(row["path"])).is_file()
-        }
-        kept += len(on_disk)
-        slots = max(0, limit - len(on_disk))
-        log.info(
-            "target=%s: RA %.4f, Dec %.4f, cutout %s deg, %s already on disk.",
-            name,
-            ra,
-            dec,
-            size_deg,
-            len(on_disk),
-        )
-        if slots == 0:
+        try:
+            new, kept = _bronze_target(target, rows, context)
+        except ArchiveError as error:  # the other targets go on
+            log.error("target=%s: %s", name, error)
+            failed.append(name)
             continue
-        found: list[dict] = []
-        for collection in collections:
-            try:
-                found.extend(query(collection, ra, dec, limit, attempts))
-            except ArchiveError as error:
-                log.warning("target=%s: %s did not answer: %s", name, collection, error)
-        chosen = [
-            row
-            for row in choose_exposures(found, limit, collections)
-            if row["obs_id"] not in on_disk
-        ][:slots]
-        jobs = [_job(name, ra, dec, row, size_deg, attempts, root) for row in chosen]
-        for job in _download_all(jobs, workers, fetch):
-            record = _record(name, job)
-            by_key[(name, job["obs_id"])] = record
-            new_rows.append(record)
-            on_disk.add(job["obs_id"])
+        downloaded += new
+        on_disk += kept
+        write_manifest(list(rows.values()), root)  # after each target: nothing is lost
 
-    if new_rows:
-        write_manifest(list(by_key.values()), root)
-    if kept == 0 and not new_rows:
+    if failed:
+        raise ArchiveError(f"The IRSA search failed for: {', '.join(failed)}.")
+    if on_disk == 0:
         raise ArchiveError("IRSA returned no SPHEREx cutouts and bronze is empty.")
-    log.info("Bronze: %s new cutouts, %s already on disk.", len(new_rows), kept)
-    return len(new_rows)
+    log.info("Bronze: %d new cutouts, %d on disk in total.", downloaded, on_disk)
+    return downloaded
 
 
-def query_collection(
-    collection: str,
-    ra: float,
-    dec: float,
-    limit: int,
-    attempts: int,
-) -> list[dict]:
-    """SIA2 rows for one collection, oldest first, a few at a time."""
-    from astropy import units as u
-    from astropy.coordinates import SkyCoord
-    from astropy.time import Time
-    from astroquery.ipac.irsa import Irsa
+def _bronze_target(target: dict, rows: dict, context: dict) -> tuple[int, int]:
+    """Bronze for one target. Updates `rows`; returns (new files, files on disk)."""
+    root, settings = context["root"], context["settings"]
+    name = str(target["id"])
+    ra, dec = float(target["ra_now"]), float(target["dec_now"])
+    size_deg = cutout_size_deg(target, settings)
 
-    # The proxy answers 502 unless the client looks like a browser.
-    Irsa._session.headers["User-Agent"] = USER_AGENT
-    coord = SkyCoord(ra, dec, unit="deg")
-    radius = SEARCH_RADIUS_ARCSEC * u.arcsec
-    found: list[dict] = []
-    seen: set[str] = set()
-    start_mjd: float | None = None
-    pages = max(1, (limit + PAGE_SIZE - 1) // PAGE_SIZE + 1)
-    for _ in range(pages):
-        if len(found) >= limit:
-            break
-        kwargs: dict = {"pos": (coord, radius), "collection": collection, "maxrec": PAGE_SIZE}
-        if start_mjd is not None:
-            kwargs["time"] = (Time(start_mjd, format="mjd").isot, "2035-01-01")
-        table = _query_sia(Irsa, kwargs, attempts)
-        if table is None or len(table) == 0:
-            break
-        fresh = 0
-        page_max = start_mjd or 0.0
-        for row in table:
-            obs_id = _text(row, "obs_id")
-            access_url = _text(row, "access_url")
-            if not obs_id or not access_url or obs_id in seen:
-                continue
-            seen.add(obs_id)
-            fresh += 1
-            t_min = _number(row, "t_min")
-            t_max = _number(row, "t_max") or t_min
-            page_max = max(page_max, t_max)
-            found.append(
+    try:
+        listing = context["find"](SkyCoord(ra * u.deg, dec * u.deg), collections_for(settings))
+    except Exception as error:  # any failure of a remote service counts as a failed search
+        raise ArchiveError(f"the IRSA search failed: {error}") from error
+    if listing.empty:
+        log.warning("target=%s: IRSA lists no SPHEREx frames at RA %.4f, Dec %.4f", name, ra, dec)
+        return 0, 0
+    # Seasons come from the complete list, before the cap, as in AI's config/targets.yaml.
+    seasons = split_seasons(listing["t_mid_mjd"], **(settings.get("seasons") or {}))
+    listing = listing.assign(season=seasons)
+    chosen = select_frames(listing, context["cap"])
+
+    def record(frame) -> dict:
+        return {
+            "target_id": name,
+            "obs_id": frame.obs_id,
+            "collection": frame.collection,
+            "detector": int(frame.detector),
+            "season": int(frame.season),
+            "t_mid_mjd": float(frame.t_mid_mjd),
+            "ra": ra,
+            "dec": dec,
+            "size_deg": size_deg,
+            "path": f"data/bronze/{name}/{_safe(frame.obs_id)}.fits",
+        }
+
+    # The manifest only lists files that exist; a file on disk that is no longer chosen stays.
+    for key in [k for k, row in rows.items() if k[0] == name]:
+        if not (root / str(rows[key]["path"])).is_file():
+            del rows[key]
+    by_obs = {frame.obs_id: frame for frame in listing.itertuples()}
+    for target_name, obs_id in list(rows):
+        if target_name == name and obs_id in by_obs:
+            rows[(name, obs_id)] = record(by_obs[obs_id])  # the season may have moved
+
+    jobs = []
+    for frame in chosen.itertuples():
+        if (name, frame.obs_id) not in rows:
+            entry = record(frame)
+            jobs.append(
                 {
-                    "obs_id": obs_id,
-                    "collection": collection,
-                    "access_url": access_url,
-                    "band": _text(row, "energy_bandpassname"),
-                    "t_min": t_min,
+                    **entry,
+                    "access_url": frame.access_url,
+                    "waits": context["waits"],
+                    "destination": root / entry["path"],
                 }
             )
-            if len(found) >= limit:
-                break
-        if fresh == 0 or page_max <= (start_mjd or 0.0):
-            break
-        start_mjd = page_max + 0.001
-    found.sort(key=lambda item: (item["t_min"], item["obs_id"]))
-    return found
+    saved = _download_all(jobs, context["workers"], context["fetch"])
+    for job in saved:
+        rows[(name, job["obs_id"])] = record(by_obs[job["obs_id"]])
+
+    mine = [row for key, row in rows.items() if key[0] == name]
+    log.info(
+        "target=%s: %d frames in IRSA (%d seasons); kept %d, at most %d per season and detector; "
+        "%d on disk, %d new, %d failed",
+        name,
+        len(listing),
+        listing["season"].nunique(),
+        len(chosen),
+        context["cap"],
+        len(mine),
+        len(saved),
+        len(jobs) - len(saved),
+    )
+    if len({row["season"] for row in mine}) < 2:
+        log.warning("target=%s: bronze has frames in fewer than 2 seasons", name)
+    return len(saved), len(mine)
 
 
 def fetch_cutout(job: dict) -> None:
@@ -254,7 +294,7 @@ def fetch_cutout(job: dict) -> None:
         f"{job['access_url']}{separator}center={job['ra']:.6f},{job['dec']:.6f}"
         f"&size={job['size_deg']:.4f}"
     )
-    payload = _get_bytes(url, job["attempts"])
+    payload = _get_bytes(url, job["waits"])
     if payload.startswith(b"\x1f\x8b"):
         import gzip
 
@@ -270,7 +310,20 @@ def fetch_cutout(job: dict) -> None:
     partial.replace(destination)
 
 
+def fits_has_products(payload: bytes) -> bool:
+    """True when the cutout is a SPHEREx MEF with the extensions the silver layer needs."""
+    if not payload.startswith(b"SIMPLE"):
+        return False
+    try:
+        with fits.open(BytesIO(payload)) as hdul:
+            names = {hdu.name.strip() for hdu in hdul}
+    except OSError:
+        return False
+    return all(name in names for name in REQUIRED_HDUS)
+
+
 def _download_all(jobs: list[dict], workers: int, fetch) -> list[dict]:
+    """Run `fetch` on every job, `workers` at a time. Return the jobs that worked."""
     if not jobs:
         return []
     saved: list[dict] = []
@@ -281,7 +334,9 @@ def _download_all(jobs: list[dict], workers: int, fetch) -> list[dict]:
             try:
                 future.result()
             except (ArchiveError, OSError, requests.RequestException) as error:
-                log.warning("Skipping %s: %s", job["obs_id"], error)
+                log.warning(
+                    "target=%s obs_id=%s: skipped: %s", job["target_id"], job["obs_id"], error
+                )
                 destination = job["destination"]
                 if destination.exists() and not fits_has_products(destination.read_bytes()):
                     destination.unlink()
@@ -290,34 +345,21 @@ def _download_all(jobs: list[dict], workers: int, fetch) -> list[dict]:
     return saved
 
 
-def _query_sia(irsa, kwargs: dict, attempts: int):
+def _get_bytes(url: str, waits: tuple[int, ...]) -> bytes:
+    """GET with one try plus one retry after each wait in `waits`."""
     last = "network error"
-    for attempt in range(1, attempts + 1):
-        try:
-            return irsa.query_sia(**kwargs)
-        except Exception as error:
-            last = str(error)
-            log.warning("SIA %s failed (%s).", kwargs.get("collection"), last)
-            if attempt < attempts:
-                time.sleep(2)
-    raise ArchiveError(f"{kwargs.get('collection')}: {last}")
-
-
-def _get_bytes(url: str, attempts: int) -> bytes:
-    last = "network error"
-    for attempt in range(1, attempts + 1):
+    for attempt in range(len(waits) + 1):
         try:
             response = requests.get(
-                url,
-                headers={"User-Agent": USER_AGENT},
-                timeout=DOWNLOAD_TIMEOUT_S,
+                url, headers={"User-Agent": USER_AGENT}, timeout=DOWNLOAD_TIMEOUT_S
             )
             response.raise_for_status()
             return response.content
         except requests.RequestException as error:
             last = str(error)
-            if attempt < attempts:
-                time.sleep(2)
+            if attempt < len(waits):
+                log.warning("GET failed (%s): retry %d in %d s", last, attempt + 1, waits[attempt])
+                time.sleep(waits[attempt])
     raise ArchiveError(last)
 
 
@@ -332,64 +374,6 @@ def _targets(config: dict, target_id: str | None) -> list[dict]:
     return chosen
 
 
-def _job(
-    target_id: str, ra: float, dec: float, row: dict, size_deg: float, attempts: int, root: Path
-) -> dict:
-    filename = f"{_safe(row['obs_id'])}.fits"
-    relative = f"data/bronze/{target_id}/{filename}"
-    return {
-        "obs_id": row["obs_id"],
-        "collection": row["collection"],
-        "band": row.get("band") or "",
-        "t_min": float(row.get("t_min") or 0.0),
-        "access_url": row["access_url"],
-        "ra": ra,
-        "dec": dec,
-        "size_deg": size_deg,
-        "attempts": attempts,
-        "path": relative,
-        "destination": root / relative,
-    }
-
-
-def _record(target_id: str, job: dict) -> dict:
-    return {
-        "target_id": target_id,
-        "obs_id": job["obs_id"],
-        "collection": job["collection"],
-        "band": job["band"],
-        "t_min": float(job["t_min"]),
-        "ra": float(job["ra"]),
-        "dec": float(job["dec"]),
-        "size_deg": float(job["size_deg"]),
-        "path": job["path"],
-    }
-
-
-def _dr1_rank(collection: str) -> int:
-    return 0 if "dr1" in collection.lower() else 1
-
-
 def _safe(obs_id: str) -> str:
     cleaned = "".join(char if char.isalnum() or char in "-_." else "-" for char in obs_id)
     return cleaned.strip("-.") or "frame"
-
-
-def _text(row, name: str) -> str:
-    if name not in getattr(row, "colnames", ()):
-        return ""
-    value = row[name]
-    if value is None or value is np.ma.masked:
-        return ""
-    return str(value).strip()
-
-
-def _number(row, name: str) -> float:
-    text = _text(row, name)
-    if not text:
-        return 0.0
-    try:
-        number = float(text)
-    except ValueError:
-        return 0.0
-    return number if np.isfinite(number) else 0.0
