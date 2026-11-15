@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=gifstory2";
+import { apply, lang, onChange, t } from "./i18n.js?v=controls1";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -152,7 +152,14 @@ function pngUrl(row) {
   return new URL(`../gold/${row.png}`, import.meta.url).href;
 }
 
+// The viewer shows the image of the mode: in "difference" that is the season b minus season a
+// PNG, where a moving object leaves its dipole (the challenge asks to subtract images).
 function viewerPicture(frame) {
+  return frame;
+}
+
+// The GIF tells the story with the season sums, so in "difference" it shows the sum of season b.
+function gifPicture(frame) {
   if (mode === "difference") return sumAt(frame.detector, frame.season_b) || frame;
   return frame;
 }
@@ -693,14 +700,7 @@ function fillPanel() {
   if (status) setTag(status, info.label, info.tag);
   put("#panel-name", object.name);
   put("#panel-type", TYPE[object.type] ? t(TYPE[object.type]) : object.type || "—");
-  if (prob) {
-    if (typeof object.p_real === "number") {
-      prob.hidden = false;
-      prob.textContent = `${(object.p_real * 100).toFixed(1)}% p_real`;
-    } else {
-      prob.hidden = true;
-    }
-  }
+  if (prob) prob.hidden = true;
   if (!notes) {
     const shiftOnly = frame && baseline ? movement(object, baseline, frame) : null;
     const moveOnly = shiftOnly == null ? "—" : `${shiftOnly.toFixed(1)}″`;
@@ -1426,19 +1426,42 @@ function drawCatalog(rows, picture) {
     const limit = magLimit(row.catalog);
     return limit == null || row.mag == null || row.mag === "" || Number(row.mag) <= limit;
   });
+  // Every source of the layers that are on is drawn (Gaia circles, CatWISE squares, SIMBAD
+  // diamonds, asteroids), as the challenge asks: catalogs of other telescopes over the image.
+  for (const row of listedSources) {
+    const pixel = skyToPixel(wcs, row.ra, row.dec);
+    if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) continue;
+    if (neutralPixel(raster, pixel.x, pixel.y)) continue;
+    const node = markerShape(row.catalog, pixel.x, pixel.y);
+    node.dataset.name = row.name;
+    marks.append(node);
+  }
   paintChosen();
 }
 
+function sameSource(node, row) {
+  return node.dataset.catalog === row.catalog && node.dataset.name === row.name;
+}
+
 function paintChosen() {
-  for (const marker of marks.querySelectorAll(".marker")) marker.remove();
+  for (const marker of marks.querySelectorAll(".marker.selected")) {
+    marker.classList.remove("selected");
+    if (marker.dataset.extra) marker.remove();
+  }
   if (!selectedSource || !catalogContext) return;
   const pixel = skyToPixel(catalogContext.wcs, selectedSource.ra, selectedSource.dec);
   const { width, height } = catalogContext;
   if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) return;
   if (neutralPixel(catalogContext.raster, pixel.x, pixel.y)) return;
-  const node = markerShape(selectedSource.catalog, pixel.x, pixel.y);
+  let node = [...marks.querySelectorAll(".marker")].find((item) => sameSource(item, selectedSource));
+  if (!node) {
+    // Hidden by the magnitude slider or a layer that is off: drawn only while it is selected.
+    node = markerShape(selectedSource.catalog, pixel.x, pixel.y);
+    node.dataset.name = selectedSource.name;
+    node.dataset.extra = "1";
+    marks.append(node);
+  }
   node.classList.add("selected");
-  marks.append(node);
   const chip = document.querySelector("#candidate-chip");
   const stage = document.querySelector("#sky-stage");
   if (!chip || !stage) return;
@@ -1641,7 +1664,7 @@ function restartPreview() {
     const count = Math.max(gifFrames.length, 1);
     const at = gifStep % count;
     const frame = gifFrames[at];
-    if (frame) preview.src = skyFor(viewerPicture(frame));
+    if (frame) preview.src = skyFor(gifPicture(frame));
     paintGifSeasons(frame ? at : -1);
     gifStep += 1;
   };
@@ -1660,7 +1683,7 @@ async function makeGif() {
     );
     const encoder = GIFEncoder();
     for (const frame of gifFrames) {
-      const picture = await loadImage(skyFor(viewerPicture(frame)));
+      const picture = await loadImage(skyFor(gifPicture(frame)));
       const canvas = document.createElement("canvas");
       canvas.width = picture.naturalWidth;
       canvas.height = picture.naturalHeight;
@@ -1996,23 +2019,6 @@ document.querySelector("#gif-speed")?.addEventListener("click", (event) => {
 });
 document.querySelector("#gif-make")?.addEventListener("click", () => makeGif());
 document.querySelector("#gif-save")?.addEventListener("click", () => saveGif());
-document.querySelector("#analyze").addEventListener("click", () => {
-  const out = document.querySelector("#cnn-out");
-  if (selectedSource) {
-    showSource(selectedSource);
-    const score = Number(selectedSource.p_real);
-    if (Number.isFinite(score)) out.textContent += t("score", { value: (score * 100).toFixed(1) });
-    return;
-  }
-  const object = byObject.get(selectedId);
-  if (!object) {
-    out.textContent = t("pickMarker");
-    return;
-  }
-  const score = Number(object.p_real);
-  const scored = Number.isFinite(score) ? t("score", { value: (score * 100).toFixed(1) }) : t("noScore");
-  out.textContent = `${object.name}: ${statusOf(object).label}.${scored} ${reasonOf(object)}`;
-});
 window.addEventListener("keydown", (event) => {
   if (event.target.closest("input, textarea")) return;
   if (event.key === "ArrowRight") {
