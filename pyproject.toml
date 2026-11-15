@@ -56,6 +56,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repo root, so tests can import training/ (not an installed package) when run as `pytest`
+pythonpath = ["."]
 # Tests that query real services (SkyBoT, SIMBAD, Gaia) are skipped by default and in CI.
 # Run them by hand with: pytest -m network
 addopts = "-q -m 'not network'"
