@@ -33,8 +33,10 @@ change without telling web). See sum_png(), difference_png() and color_png():
 
 `flags` is text: the flag names separated by commas, never SOURCE (almost every frame has
 it), for example "BLOOM,OVERFLOW"; empty text when there are none. In pandas read it as
-df["flags"]: df.flags is a pandas attribute, not the column. `saturated` says the target
-pixel is empty (OVERFLOW or NONLINEAR): the site shows "saturated center".
+df["flags"]: df.flags is a pandas attribute, not the column. In frames, `saturated` says
+OVERFLOW or NONLINEAR within 2 px of the target. In sums, it says the center of the target
+(within 2 px) is painted as saturated: in silver, `saturated` (every frame saturated) or
+n_saturated > 0 and n_saturated >= n_valid. The site shows "saturated center".
 
 Pixel convention:
     0-based position in the PNG, origin at the top-left corner (x to the right, y down).
@@ -127,7 +129,7 @@ SUMS = pa.schema(
         _required("n_frames", pa.int32()),  # frames of frames.parquet that went into the sum
         _required("background_noise", pa.float64()),  # MJy/sr per pixel, away from sources
         _required("flags", pa.string()),
-        _required("saturated", pa.bool_()),  # the target pixel is empty in this sum
+        _required("saturated", pa.bool_()),  # the target center is painted as saturated
         _required("png", pa.string()),
     ]
 )

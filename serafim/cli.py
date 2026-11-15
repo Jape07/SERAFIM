@@ -2,7 +2,8 @@
 
 - `python -m serafim mock [--all-targets]`: simulated gold in data/gold/.
 - `python -m serafim bronze [--target X]`: IRSA cutouts in data/bronze/ (task D3).
-- `python -m serafim silver [--target X] [--force]`: frames in data/silver/ (task D4).
+- `python -m serafim silver [--target X] [--force]`: frames and sums in data/silver/ (D4, D5).
+- `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
 - `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
 
 Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
@@ -40,12 +41,17 @@ def build_parser() -> argparse.ArgumentParser:
     bronze_cmd.add_argument("--target", help=TARGET_HELP)
 
     silver_cmd = commands.add_parser(
-        "silver", help="Clean, mask and reproject bronze frames to data/silver/ (task D4)."
+        "silver", help="Frames (D4) and sums per detector and season (D5) in data/silver/."
     )
     silver_cmd.add_argument("--target", help=TARGET_HELP)
     silver_cmd.add_argument(
         "--force", action="store_true", help="Reproject frames that are already in silver."
     )
+
+    alignment_cmd = commands.add_parser(
+        "alignment", help="Measure the sums against Gaia and rewrite docs/alignment.md (D5)."
+    )
+    alignment_cmd.add_argument("--target", help=TARGET_HELP)
 
     run =commands.add_parser("run", help="Run the full pipeline (task D9).")
     run.add_argument("--target", help=TARGET_HELP)
@@ -70,6 +76,8 @@ def main(argv: list[str] | None = None) -> int:
         return bronze(args.target)
     if args.command == "silver":
         return silver(args.target, force=args.force)
+    if args.command == "alignment":
+        return alignment(args.target)
     log.error("Command '%s' is not implemented yet (task D9).", args.command)
     return 1
 
@@ -87,15 +95,31 @@ def bronze(target_id: str | None) -> int:
 
 
 def silver(target_id: str | None, *, force: bool = False) -> int:
-    """Silver 1: frames cleaned and reprojected. Sums and differences come in D5 and D6."""
+    """Silver 1 (frames) and silver 2 (sums). Differences come in D6."""
     from serafim.silver.frames import build_frames
+    from serafim.silver.sums import build_sums
 
     try:
         written = build_frames(target_id, force=force)
+        sums = build_sums(target_id)
     except (FileNotFoundError, ValueError) as error:
         log.error("%s", error)
         return 1
-    log.info("Silver: %d frames reprojected now.", written)
+    log.info("Silver: %d frames reprojected now, %d sums.", written, sums)
+    return 0
+
+
+def alignment(target_id: str | None) -> int:
+    """Measure the sums against Gaia; docs/alignment.md says if they meet the goal."""
+    from serafim.silver.alignment import GOAL_PX, run
+
+    try:
+        worst = run(target_id)
+    except (FileNotFoundError, StopIteration) as error:
+        log.error("No sums to measure (%s): run `python -m serafim silver` first.", error)
+        return 1
+    if worst >= GOAL_PX:
+        log.warning("Largest offset %.3f px is over the goal of %.1f px: tell AI.", worst, GOAL_PX)
     return 0
 
 
