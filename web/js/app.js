@@ -701,6 +701,20 @@ document.querySelector("#analyze").addEventListener("click", () => {
   const scored = Number.isFinite(score) ? ` p_real ${(score * 100).toFixed(1)}%.` : " Sin puntuación CNN todavía.";
   out.textContent = `${object.name}: ${statusOf(object).label}.${scored} ${reasonOf(object)}`;
 });
+const themeButton = document.querySelector("#theme");
+function paintTheme(theme) {
+  const dark = theme === "dark";
+  if (dark) document.documentElement.dataset.theme = "dark";
+  else delete document.documentElement.dataset.theme;
+  document.querySelector("#theme-icon").textContent = dark ? "dark_mode" : "light_mode";
+  document.querySelector("#theme-label").textContent = dark ? "Modo oscuro" : "Modo claro";
+  themeButton.setAttribute("aria-pressed", dark ? "true" : "false");
+  localStorage.setItem("serafim-theme", dark ? "dark" : "light");
+}
+paintTheme(localStorage.getItem("serafim-theme") === "dark" ? "dark" : "light");
+themeButton.addEventListener("click", () => {
+  paintTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
 document.querySelector("#help-open").addEventListener("click", () => document.querySelector("#help").showModal());
 document.querySelector("#help-close").addEventListener("click", () => document.querySelector("#help").close());
 window.addEventListener("keydown", (event) => {
