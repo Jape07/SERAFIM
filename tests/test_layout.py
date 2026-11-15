@@ -20,7 +20,10 @@ def test_config_has_the_five_challenge_targets():
     for target in config["targets"]:
         assert 0 <= target["ra_now"] < 360
         assert -90 <= target["dec_now"] <= 90
-    assert {"cutout_size_deg", "max_frames_per_target", "collections"} <= set(config["settings"])
+    settings = config["settings"]
+    assert {"cutout_size_deg", "max_frames_per_season_detector", "collections"} <= set(settings)
+    assert settings["max_frames_per_season_detector"] == 12
+    assert "max_frames_per_target" not in settings, "replaced by the cap per season and detector"
 
 
 @pytest.mark.parametrize(

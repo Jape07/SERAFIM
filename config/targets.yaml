@@ -4,10 +4,12 @@
 # Run it again instead of editing numbers; every number comes from a query you can repeat.
 
 settings:
-  cutout_size_deg: 0.25            # Cutout per target (task D3)
-  max_frames_per_target: 60        # Temporary cap: D1 measures the MB, D3 sets the real cap
+  cutout_size_deg: 0.25            # Side of each cutout; a target can set its own cutout_size_deg
+  # At most this many frames per (season, detector), spread in time. D1 measured it: 874 frames,
+  # ~3.8 GB for the 5 targets (docs/real_fits.md). EPSF stays in bronze.
+  max_frames_per_season_detector: 12
   parallel_downloads: 8            # Be nice to IRSA: never more than 8 at once
-  retries: 3
+  retries: 3                       # After the first try; it waits 5, 10 and 15 s
   # SIA collections in priority order: when an exposure is in several, the first one wins
   # (DR1 over QR3).
   collections: [spherex_dr1, spherex_dr1_deep, spherex_qr3, spherex_qr3_deep]
