@@ -112,6 +112,68 @@ def test_wise_0855_warns_about_the_star_it_passes():
     assert "not WISE 0855" in warning and "detectors 1 to 4" in warning
 
 
+def row(detector, season, ratio, error, date, n_frames=9):
+    return {"detector": detector, "season": season, "ratio": ratio, "error": error,
+            "mean_date_utc": f"{date}T00:00:00", "n_frames": n_frames}  # fmt: skip
+
+
+ROWS = [
+    row(1, 1, 1.0, 0.0, "2025-09-10"),
+    row(1, 3, 1.54, 0.09, "2026-09-08"),
+    row(5, 1, 1.0, 0.0, "2025-09-12"),
+    row(5, 3, 0.86, 0.09, "2026-09-09"),
+    row(6, 3, 4.7, 1.4, "2026-09-09", n_frames=1),  # one frame: not told
+]
+
+
+def test_only_certain_changes_beyond_the_control_are_told():
+    # 0.86 is inside the ~30 % the Barnard control allows; 4.7 is far too uncertain
+    assert guides.strongest_change(ROWS)["detector"] == 1
+    text = guides._change_text(ROWS)
+    assert text == ("Measured: in detector 1 it was 1.5 times as bright in September 2026 as in "
+                    "September 2025.")  # fmt: skip
+    assert guides._change_text(ROWS[2:4]).startswith("SPHEREx shows no change larger")
+
+
+def test_a_fading_star_is_told_as_fainter():
+    fading = [dict(ROWS[0]), {**ROWS[1], "ratio": 0.5, "error": 0.03}]
+    assert "2.0 times fainter in September 2026 than in September 2025" in guides._change_text(
+        fading
+    )
+
+
+def test_brightness_guides_use_the_measured_light_curves():
+    """RW Aurigae and R Draconis tell what docs/light_curves.json measured, if it exists."""
+    for target_id in ("rw_aur", "r_dra"):
+        rows = guides.light_curve(target_id)
+        if not rows:
+            continue
+        guide = BY_ID[target_id]
+        expected = {}
+        for row in guides.certain(rows):
+            expected.setdefault(str(row["detector"]), {})[str(row["season"])] = round(
+                row["ratio"], 2
+            )
+        assert guide["facts"]["brightness_vs_first_season"] == expected
+        period = guides.measured_period(target_id)
+        if period:  # a real period says more than a ratio between two seasons
+            assert f"every {period['period_days']:.0f} days" in guide["what_to_look_at"]
+            assert guide["facts"]["measured_period_days"] == period["period_days"]
+        else:
+            assert guides._change_text(rows) in guide["what_to_look_at"]
+
+
+def test_r_draconis_period_from_spherex_alone_matches_the_catalog():
+    """The pulsation SPHEREx finds on its own must agree with the catalog (247 days)."""
+    period = guides.measured_period("r_dra")
+    if period is None:
+        pytest.skip("no docs/light_curves.json with a period for R Draconis")
+    assert period["period_days"] == pytest.approx(guides.PERIOD_DAYS["r_dra"], rel=0.1)
+    low, high = period["half_power_days"]
+    assert low <= guides.PERIOD_DAYS["r_dra"] <= high
+    assert guides.measured_period("rw_aur") is None  # three clumps of seasons: no period claimed
+
+
 def test_barnard_is_shown_where_its_saturated_center_is_smallest():
     assert BY_ID["barnard"]["how_to_look"]["detectors"] == [5, 6]
 

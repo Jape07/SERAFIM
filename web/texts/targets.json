@@ -142,7 +142,7 @@
       "kind": "brightness",
       "headline": "A young star that dims without warning",
       "what_it_is": "A very young star, still surrounded by the disk of gas and dust it formed from. Clumps of that dust sometimes pass in front of it and dim it for weeks or months.",
-      "what_to_look_at": "It does not move. Keep the same detector and step through the 3 seasons: its brightness can change from one season to the next.",
+      "what_to_look_at": "It does not move. Keep the same detector and step through the 3 seasons: its brightness can change from one season to the next. Measured: in detector 1 it was 1.5 times as bright in September 2026 as in September 2025.",
       "how_to_look": {
         "detectors": [
           1
@@ -173,7 +173,29 @@
           4,
           5,
           6
-        ]
+        ],
+        "brightness_vs_first_season": {
+          "1": {
+            "2": 1.39,
+            "3": 1.54
+          },
+          "2": {
+            "2": 1.21,
+            "3": 1.15
+          },
+          "3": {
+            "2": 1.03,
+            "3": 1.0
+          },
+          "4": {
+            "2": 0.9,
+            "3": 0.87
+          },
+          "5": {
+            "2": 0.86,
+            "3": 0.74
+          }
+        }
       }
     },
     {
@@ -182,7 +204,7 @@
       "kind": "brightness",
       "headline": "A giant star that swells and fades every 8 months",
       "what_it_is": "An old red giant that pulsates: it grows and shrinks, and its brightness changes a lot, in a cycle of about 247 days. Stars like this are called Mira variables.",
-      "what_to_look_at": "Keep one detector and step through the 4 seasons. They fall at different points of its cycle, so it should look brighter in some seasons than in others.",
+      "what_to_look_at": "Keep one detector and step through the 4 seasons. They fall at different points of its cycle, so it should look brighter in some seasons than in others. Measured with SPHEREx alone: it brightens and fades every 244 days or so; catalogs say 247.",
       "how_to_look": {
         "detectors": [
           1,
@@ -203,7 +225,6 @@
       },
       "watch_out": [
         "It is so bright that its center is saturated in every detector: the camera got more light than it can count. Those pixels are painted with the brightest color.",
-        "Compare the size of its glow: when the star is brighter, the glow is bigger.",
         "It sits near the spot SPHEREx passes over most often, so it has 1259 frames, far more than the others."
       ],
       "facts": {
@@ -221,7 +242,36 @@
           5,
           6
         ],
-        "period_days": 247.2
+        "period_days": 247.2,
+        "brightness_vs_first_season": {
+          "1": {
+            "2": 0.46,
+            "4": 0.99
+          },
+          "2": {
+            "2": 0.46,
+            "4": 0.39
+          },
+          "3": {
+            "2": 0.97,
+            "3": 1.01,
+            "4": 0.33
+          },
+          "4": {
+            "2": 0.6,
+            "4": 0.66
+          },
+          "5": {
+            "2": 0.74,
+            "4": 0.63
+          },
+          "6": {
+            "2": 0.83,
+            "3": 0.84,
+            "4": 0.48
+          }
+        },
+        "measured_period_days": 243.5
       }
     }
   ],
