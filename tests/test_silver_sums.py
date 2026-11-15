@@ -67,6 +67,34 @@ def test_saturated_means_every_frame_and_n_saturated_counts_them():
     assert not out["saturated"][1, 1] and out["saturated"][2, 2]
 
 
+def test_an_absurd_value_of_one_frame_is_dropped():
+    # Like eps_indi_b d5 s1: one frame at -85 with an error of 0.04, the others at 0.1.
+    frames = [frame(0.1, 0.04**2) for _ in range(12)]
+    frames[0]["image"][7, 7] = -85.0
+    out = combine(frames)
+    assert out["image"][7, 7] == pytest.approx(0.1, abs=1e-6)
+    assert out["n_valid"][7, 7] == 11 and out["n_valid"][0, 0] == 12
+
+
+def test_with_three_frames_the_odd_one_goes():
+    # Like wise_0855 d5 s1: 0.02, -52.3 and 0.04.
+    frames = [frame(0.02, 0.033**2), frame(-52.3, 0.032**2), frame(0.04, 0.034**2)]
+    out = combine(frames)
+    assert out["image"][0, 0] == pytest.approx(0.03, abs=0.002) and out["n_valid"][0, 0] == 2
+
+
+def test_a_star_that_changes_between_frames_is_kept():
+    # Each frame sees another wavelength: a star pixel at 10, 12, 8, 11, 9 is real, not clipped.
+    frames = [frame(v, 0.01) for v in (10.0, 12.0, 8.0, 11.0, 9.0)]
+    out = combine(frames)
+    assert out["n_valid"][0, 0] == 5
+
+
+def test_two_frames_are_never_clipped():
+    out = combine([frame(0.1, 0.0016), frame(-50.0, 0.0016)])
+    assert out["n_valid"][0, 0] == 2
+
+
 def test_types_are_the_agreed_ones():
     out = combine([frame(), frame()])
     assert out["image"].dtype == out["variance"].dtype == np.float32

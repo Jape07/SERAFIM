@@ -10,7 +10,10 @@ From `data/silver/frames.parquet` and the frame `.npz` of D4, one sum per cell:
 A cell without frames has no sum (nothing is made up) and there is no (0, 0).
 
 The sum is the inverse-variance weighted mean of the frames, pixel by pixel, using only the
-pixels that are not masked. It stays in MJy/sr: nothing is stretched or clipped.
+pixels that are not masked and, where there are 3 frames or more, not far from the other frames
+of that pixel (clip_outliers: more than 5 times the spread from the per-pixel median; some
+frames have absurd values their FLAGS do not mark). It stays in MJy/sr: nothing is stretched.
+n_valid counts the frames that were kept.
 
 `.npz` of a sum: data/silver/<target>/sums/d<detector>_s<season>.npz
 
@@ -49,6 +52,7 @@ Everything is recomputed on every run: it is cheap and it follows the frames whe
 from __future__ import annotations
 
 import logging
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -72,6 +76,8 @@ from serafim.silver.store import (
 
 log = logging.getLogger("serafim.silver")
 
+CLIP_SIGMA = 5.0
+CLIP_MIN_FRAMES = 3  # with 2 frames there is no telling which one is wrong
 _MJD_ZERO = pd.Timestamp("1858-11-17", tz="UTC")
 
 
@@ -84,12 +90,35 @@ def sum_cells(frames: pd.DataFrame) -> list[tuple[int, int, pd.DataFrame]]:
     return sorted(cells, key=lambda cell: (cell[0], cell[1]))
 
 
+def clip_outliers(images: np.ndarray, variances: np.ndarray, valid: np.ndarray) -> np.ndarray:
+    """`valid` without the values far from the other frames of the same pixel.
+
+    Some frames have a few absurd values that their FLAGS do not mark (e.g. -85 MJy/sr with an
+    error of 0.04, next to 11 frames at 0.1): they leave black specks in the sums. Where a pixel
+    has at least CLIP_MIN_FRAMES valid frames, a value is dropped when it is more than
+    CLIP_SIGMA times away from the per-pixel median, the scale being the larger of the spread
+    between frames (1.4826 * MAD) and the frame's own error. A star whose brightness changes
+    between frames (each frame sees another wavelength) has a large spread and is kept.
+    """
+    values = np.where(valid, images, np.nan)
+    count = valid.sum(axis=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # pixels without any valid frame
+        median = np.nanmedian(values, axis=0)
+        spread = 1.4826 * np.nanmedian(np.abs(values - median), axis=0)
+    scale = np.maximum(spread, np.sqrt(np.where(valid, variances, 0.0)))
+    far = np.abs(np.nan_to_num(values - median)) > CLIP_SIGMA * scale
+    return valid & ~(far & (count >= CLIP_MIN_FRAMES))
+
+
 def combine(frames: list[dict]) -> dict[str, np.ndarray]:
-    """Inverse-variance weighted mean of silver frames (dicts as load_frame() returns them)."""
+    """Inverse-variance weighted mean of silver frames (dicts as load_frame() returns them),
+    after dropping per-pixel outliers (clip_outliers)."""
     images = np.stack([f["image"] for f in frames]).astype(np.float64)
     variances = np.stack([f["variance"] for f in frames]).astype(np.float64)
     masks = np.stack([f["mask"] for f in frames])
     valid = ~masks & np.isfinite(images) & np.isfinite(variances) & (variances > 0)
+    valid = clip_outliers(images, variances, valid)
     weights = np.where(valid, 1.0 / np.where(valid, variances, 1.0), 0.0)
     total = weights.sum(axis=0)
     n_valid = valid.sum(axis=0)

@@ -14,7 +14,7 @@ from serafim.pipeline import publish_targets, run
 
 def test_only_checked_targets_are_published():
     config = load_config()
-    assert publish_targets(config) == ["barnard", "wise_0855"]
+    assert publish_targets(config) == ["barnard", "eps_indi_b", "wise_0855", "rw_aur", "r_dra"]
     assert set(config["settings"]["publish"]) <= {t["id"] for t in config["targets"]}
 
 
@@ -44,7 +44,48 @@ def calls(monkeypatch):
     monkeypatch.setattr("serafim.silver.sums.build_sums", record("sums"))
     monkeypatch.setattr("serafim.silver.differences.build_differences", record("differences"))
     monkeypatch.setattr("serafim.gold.build.build_gold", record("gold"))
+    # Every published target has silver sums, unless a test says otherwise.
+    monkeypatch.setattr("serafim.pipeline.targets_with_sums",
+                        lambda root: set(publish_targets(load_config())))
     return log
+
+
+def test_a_target_that_fails_is_left_out_and_the_others_are_published(calls, monkeypatch,
+                                                                      capsys):
+    from serafim.bronze.download import ArchiveError
+
+    def bronze(target=None, **kwargs):
+        calls.append(("bronze", target))
+        if target == "wise_0855":
+            raise ArchiveError("the IRSA search failed and there is no saved frame list")
+
+    published = publish_targets(load_config())
+    monkeypatch.setattr("serafim.bronze.download.download", bronze)
+    monkeypatch.setattr("serafim.pipeline.targets_with_sums",
+                        lambda root: set(published) - {"wise_0855"})
+    run()
+    assert calls[-1] == ("gold", [t for t in published if t != "wise_0855"])
+    assert "::warning::target=wise_0855 left out of this run" in capsys.readouterr().out
+
+
+def test_a_failed_target_with_older_silver_stays_in_gold(calls, monkeypatch, capsys):
+    from serafim.bronze.download import ArchiveError
+
+    def bronze(target=None, **kwargs):
+        if target == "r_dra":
+            raise ArchiveError("IRSA is down")
+
+    monkeypatch.setattr("serafim.bronze.download.download", bronze)
+    run()
+    assert calls[-1] == ("gold", publish_targets(load_config()))
+    assert "gold keeps its previous silver" in capsys.readouterr().out
+
+
+def test_nothing_to_publish_fails_the_run(calls, monkeypatch):
+    monkeypatch.setattr("serafim.pipeline.targets_with_sums", lambda root: set())
+    with pytest.raises(ValueError, match="nothing to publish"):
+        run()
+    assert not any(step == "gold" for step, _ in calls)
 
 
 def test_from_bronze_runs_every_step_and_gold_has_every_published_target(calls):
@@ -69,7 +110,7 @@ def test_from_gold_only_rebuilds_gold(calls):
 
 def test_a_target_that_is_not_published_is_refused(calls):
     with pytest.raises(ValueError, match="settings.publish"):
-        run("r_dra")
+        run("pluto")
     assert calls == []
 
 

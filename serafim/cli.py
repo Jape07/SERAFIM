@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
         "bronze", help="Download IRSA cutouts to data/bronze/ (task D3)."
     )
     bronze_cmd.add_argument("--target", help=TARGET_HELP)
+    bronze_cmd.add_argument(
+        "--save-frame-lists", action="store_true",
+        help="Only write config/spherex_frames/<target>.parquet (the fallback when IRSA's search "
+             "is down); commit them.",
+    )
 
     silver_cmd = commands.add_parser(
         "silver", help="Frames (D4), sums (D5) and differences (D6) in data/silver/."
@@ -95,6 +100,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "mock":
         return mock(Path(args.out), all_targets=args.all_targets)
     if args.command == "bronze":
+        if args.save_frame_lists:
+            from serafim.bronze.download import save_frame_lists
+
+            return 0 if save_frame_lists(args.target) else 1
         return bronze(args.target)
     if args.command == "silver":
         return silver(args.target, force=args.force)
