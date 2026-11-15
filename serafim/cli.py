@@ -5,6 +5,7 @@
 - `python -m serafim silver [--target X] [--force]`: frames, sums, differences (D4 to D6).
 - `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
 - `python -m serafim png [--target X]`: PNG of sums, differences and color in data/gold/ (D7).
+- `python -m serafim gold [--target X]`: real gold (tables, meta.json, PNGs), validated (D8).
 - `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
 
 Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
@@ -60,6 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
     png_cmd.add_argument("--target", help=TARGET_HELP)
     png_cmd.add_argument("--out", default="data/gold", help="Gold folder (default: data/gold).")
 
+    gold_cmd = commands.add_parser(
+        "gold", help="Real gold: tables, meta.json and PNGs, checked with validate_gold (D8)."
+    )
+    gold_cmd.add_argument("--target", help="Only this target (default: every target in silver).")
+    gold_cmd.add_argument("--out", default="data/gold", help="Gold folder (default: data/gold).")
+    gold_cmd.add_argument("--no-catalogs", action="store_true",
+                          help="Write catalogs.parquet empty (no Gaia/SIMBAD/SkyBoT queries).")
+    gold_cmd.add_argument("--no-spectra", action="store_true",
+                          help="Write spectra.parquet empty (no photometry on bronze).")
+
     run =commands.add_parser("run", help="Run the full pipeline (task D9).")
     run.add_argument("--target", help=TARGET_HELP)
     run.add_argument(
@@ -85,6 +96,9 @@ def main(argv: list[str] | None = None) -> int:
         return silver(args.target, force=args.force)
     if args.command == "alignment":
         return alignment(args.target)
+    if args.command == "gold":
+        return gold(args.target, Path(args.out), catalogs=not args.no_catalogs,
+                    spectra=not args.no_spectra)
     if args.command == "png":
         return png(args.target, Path(args.out))
     log.error("Command '%s' is not implemented yet (task D9).", args.command)
@@ -118,6 +132,22 @@ def silver(target_id: str | None, *, force: bool = False) -> int:
         return 1
     log.info("Silver: %d frames reprojected now, %d sums, %d differences.", written, sums,
              differences)
+    return 0
+
+
+def gold(target_id: str | None, gold_dir: Path, *, catalogs: bool = True,
+         spectra: bool = True) -> int:
+    """Real gold from silver and AI's tables; the previous gold stays if the check fails."""
+    from serafim.gold import build
+
+    try:
+        build.build_gold(target_id, gold_dir=gold_dir,
+                         catalogs=build.ai_catalogs if catalogs else None,
+                         spectra=build.ai_spectra if spectra else None)
+    except (FileNotFoundError, ValueError) as error:  # GoldValidationError is a ValueError
+        log.error("%s", error)
+        return 1
+    log.info("validate_gold: %s follows the contract", gold_dir)
     return 0
 
 
