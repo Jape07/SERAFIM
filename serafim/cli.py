@@ -2,7 +2,7 @@
 
 - `python -m serafim mock [--all-targets]`: simulated gold in data/gold/.
 - `python -m serafim bronze [--target X]`: IRSA cutouts in data/bronze/ (task D3).
-- `python -m serafim silver [--target X] [--force]`: frames and sums in data/silver/ (D4, D5).
+- `python -m serafim silver [--target X] [--force]`: frames, sums, differences (D4 to D6).
 - `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
 - `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
 
@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     bronze_cmd.add_argument("--target", help=TARGET_HELP)
 
     silver_cmd = commands.add_parser(
-        "silver", help="Frames (D4) and sums per detector and season (D5) in data/silver/."
+        "silver", help="Frames (D4), sums (D5) and differences (D6) in data/silver/."
     )
     silver_cmd.add_argument("--target", help=TARGET_HELP)
     silver_cmd.add_argument(
@@ -95,17 +95,20 @@ def bronze(target_id: str | None) -> int:
 
 
 def silver(target_id: str | None, *, force: bool = False) -> int:
-    """Silver 1 (frames) and silver 2 (sums). Differences come in D6."""
+    """Silver 1 (frames), silver 2 (sums) and silver 3 (differences)."""
+    from serafim.silver.differences import build_differences
     from serafim.silver.frames import build_frames
     from serafim.silver.sums import build_sums
 
     try:
         written = build_frames(target_id, force=force)
         sums = build_sums(target_id)
+        differences = build_differences(target_id)
     except (FileNotFoundError, ValueError) as error:
         log.error("%s", error)
         return 1
-    log.info("Silver: %d frames reprojected now, %d sums.", written, sums)
+    log.info("Silver: %d frames reprojected now, %d sums, %d differences.", written, sums,
+             differences)
     return 0
 
 
