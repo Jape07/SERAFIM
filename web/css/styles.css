@@ -587,6 +587,29 @@ h2 { margin: 0 0 0.35rem; font-size: 1.7rem; color: var(--ink); }
   font-size: 0.75rem;
 }
 .hint { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.75rem; }
+#creador-gif { margin-top: 2rem; }
+#creador-gif .gif-layout { align-items: stretch; }
+#creador-gif .gif-controls { gap: 1rem; }
+#creador-gif .gif-avail { flex-direction: row; justify-content: space-between; align-items: center; }
+#creador-gif .gif-avail strong { font-size: 0.95rem; }
+#creador-gif .gif-story { display: flex; flex-direction: column; gap: 0.7rem; }
+#creador-gif .gif-stage { aspect-ratio: 16 / 10; min-height: 16rem; border-color: #0f172a; }
+#creador-gif .gif-chip {
+  position: absolute;
+  z-index: 3;
+  max-width: 46%;
+  padding: 0.28rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.78);
+  color: #e2e8f0;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+#creador-gif .gif-chip.tl { top: 0.65rem; left: 0.65rem; }
+#creador-gif .gif-chip.tr { top: 0.65rem; right: 0.65rem; text-align: right; }
+#creador-gif .gif-chip.bl { bottom: 0.65rem; left: 0.65rem; color: #f5c400; border: 1px solid rgba(245, 196, 0, 0.35); }
+#creador-gif .gif-chip.br { bottom: 0.65rem; right: 0.65rem; color: #cbd5e1; }
 #spectrum {
   margin: 0.45rem 0 0;
   padding: 0.4rem 0.5rem 0.25rem;
