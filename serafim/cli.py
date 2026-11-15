@@ -4,6 +4,7 @@
 - `python -m serafim bronze [--target X]`: IRSA cutouts in data/bronze/ (task D3).
 - `python -m serafim silver [--target X] [--force]`: frames, sums, differences (D4 to D6).
 - `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
+- `python -m serafim png [--target X]`: PNG of sums, differences and color in data/gold/ (D7).
 - `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
 
 Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
@@ -53,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     alignment_cmd.add_argument("--target", help=TARGET_HELP)
 
+    png_cmd = commands.add_parser(
+        "png", help="PNG of every sum, difference and color image in data/gold/png/ (D7)."
+    )
+    png_cmd.add_argument("--target", help=TARGET_HELP)
+    png_cmd.add_argument("--out", default="data/gold", help="Gold folder (default: data/gold).")
+
     run =commands.add_parser("run", help="Run the full pipeline (task D9).")
     run.add_argument("--target", help=TARGET_HELP)
     run.add_argument(
@@ -78,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
         return silver(args.target, force=args.force)
     if args.command == "alignment":
         return alignment(args.target)
+    if args.command == "png":
+        return png(args.target, Path(args.out))
     log.error("Command '%s' is not implemented yet (task D9).", args.command)
     return 1
 
@@ -109,6 +118,19 @@ def silver(target_id: str | None, *, force: bool = False) -> int:
         return 1
     log.info("Silver: %d frames reprojected now, %d sums, %d differences.", written, sums,
              differences)
+    return 0
+
+
+def png(target_id: str | None, gold_dir: Path) -> int:
+    """Gold PNGs from silver: sums, differences and color images."""
+    from serafim.gold.png import build_pngs
+
+    try:
+        written = build_pngs(target_id, gold_dir=gold_dir)
+    except FileNotFoundError as error:
+        log.error("%s", error)
+        return 1
+    log.info("Gold: %d PNG in %s.", written, gold_dir)
     return 0
 
 
