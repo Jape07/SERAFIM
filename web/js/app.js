@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=stitch";
+import { apply, lang, onChange, t } from "./i18n.js?v=summary1";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -44,6 +44,11 @@ function formatNumber(value) {
 function langCode() {
   return document.documentElement.lang === "es" ? "es" : "en";
 }
+function put(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.textContent = value;
+  return el;
+}
 
 const MODES = ["sum", "difference", "all_seasons", "blink"];
 const LAYERS = ["gaia", "catwise", "simbad", "skybot"];
@@ -61,6 +66,8 @@ let byObject = new Map();
 let catalog = [];
 let index = 0;
 let selectedId = "";
+let listedSources = [];
+let catalogContext = null;
 let timer = 0;
 let blinkTimer = 0;
 let blinkOn = false;
@@ -87,6 +94,13 @@ let selectedSource = null;
 let magReach = 0;
 const catalogCache = new Map();
 const spectrumCache = new Map();
+const pathCache = new Map();
+const frameCache = new Map();
+let spectrumRows = [];
+let pathRows = [];
+let searchPoint = null;
+let fovArcmin = 15;
+let searchState = "";
 const projectionSeen = new Set();
 const goldTargets = new Map();
 const cache = new Map();
@@ -373,10 +387,11 @@ function altFor(frame, name) {
 function showNotes(frame) {
   const rows = noteRows(frame);
   const badge = document.querySelector("#saturated-badge");
+  const host = document.querySelector("#flag-notes");
+  if (!badge || !host) return;
   const saturated = rows.some(rowSaturated);
   badge.hidden = !saturated;
   badge.textContent = saturated ? (lang() === "es" ? t("saturatedBadge") : guide?.saturated_badge || t("saturatedBadge")) : "";
-  const host = document.querySelector("#flag-notes");
   host.replaceChildren();
   for (const name of flagNames(rows)) {
     const line = document.createElement("p");
@@ -400,11 +415,10 @@ function armBlink(pair, pictures) {
   const running = mode === "blink" && !blinkPaused && pair.length > 1 && pictures.every(Boolean);
   if (!running) {
     stopBlink();
-    if (mode !== "blink") playButton.textContent = timer ? t("pause") : t("play");
-    else playButton.textContent = t("play");
+    if (playButton) playButton.textContent = mode === "blink" ? t("play") : (timer ? t("pause") : t("play"));
     return;
   }
-  playButton.textContent = t("pause");
+  if (playButton) playButton.textContent = t("pause");
   const key = pairKey(pair);
   if (blinkTimer && blinkKey === key) return;
   stopBlink();
@@ -524,7 +538,7 @@ function tally(frame) {
 function fillEpochs() {
   const frame = sequence[index];
   const baseline = sequence[0];
-  if (!frame || !baseline) return;
+  if (!frame || !baseline || !document.querySelector("#stat-known")) return;
   const now = tally(frame);
   const base = tally(baseline);
   document.querySelector("#stat-known").textContent = "—";
@@ -627,7 +641,7 @@ function draw(frame) {
   for (const hit of hits.filter((item) => item.frame_id === frame.frame_id)) {
     const object = byObject.get(hit.object_id);
     if (!object) continue;
-    if (object.status === "Discarded" && !discardedBox.checked) continue;
+    if (object.status === "Discarded" && discardedBox && !discardedBox.checked) continue;
     const node = shape(kindFor(object), hit.x_px, hit.y_px);
     if (object.object_id === selectedId) node.classList.add("selected");
     node.addEventListener("click", () => {
@@ -645,38 +659,55 @@ function fillPanel() {
   const object = byObject.get(selectedId);
   const status = document.querySelector("#panel-status");
   const prob = document.querySelector("#panel-prob");
-  document.querySelector("#panel-date").textContent = frame ? fecha(when(frame)) : "—";
+  put("#panel-date", frame ? fecha(when(frame)) : "—");
   const wave = frame ? bandText(frame.detector === "color" ? "color" : frame.detector) : "—";
-  document.querySelector("#panel-wave").textContent = wave;
-  document.querySelector("#wave-read").textContent = wave;
-  document.querySelector("#panel-now").textContent = frame ? fecha(when(frame)) : "—";
-  document.querySelector("#panel-then").textContent = baseline ? fecha(when(baseline)) : "—";
-  document.querySelector("#panel-region").textContent = targetOf().name;
-  document.querySelector("#panel-span").textContent =
-    frame && baseline ? t("interval", { value: intervalo(baseline, frame) }) : t("intervalEmpty");
+  put("#panel-wave", wave);
+  put("#wave-read", wave);
+  const later = frame && mode === "difference" ? (sumAt(frame.detector, frame.season_b) || frame) : frame;
+  const earlier = frame && mode === "difference" ? (sumAt(frame.detector, frame.season_a) || baseline) : baseline;
+  put("#panel-now", later && when(later) ? fecha(when(later)) : "—");
+  put("#panel-then", earlier && when(earlier) ? fecha(when(earlier)) : "—");
+  put("#panel-region", targetOf().name);
+  put("#panel-span", later && earlier && when(later) && when(earlier)
+    ? t("interval", { value: intervalo(earlier, later) })
+    : t("intervalEmpty"));
+  const notes = document.querySelector("#panel-notes");
   if (!object) {
-    setTag(status, t("selectMarker"), "amber");
-    document.querySelector("#panel-name").textContent = t("noneChosen");
-    document.querySelector("#panel-type").textContent = "—";
-    prob.hidden = true;
-    document.querySelector("#panel-notes").replaceChildren(t("detailsIdle"));
-    document.querySelector("#panel-move").textContent = "—";
-    document.querySelector("#move-read").textContent = "—";
-    document.querySelector("#panel-place").textContent = "—";
-    document.querySelector("#place-read").textContent = "—";
+    if (status) setTag(status, t("selectMarker"), "amber");
+    put("#panel-name", t("noneChosen"));
+    put("#panel-type", "—");
+    if (prob) prob.hidden = true;
+    if (notes) notes.replaceChildren(t("detailsIdle"));
+    put("#panel-move", "—");
+    put("#move-read", "—");
+    put("#panel-place", "—");
+    put("#place-read", "—");
     return;
   }
   const info = statusOf(object);
-  setTag(status, info.label, info.tag);
-  document.querySelector("#panel-name").textContent = object.name;
-  document.querySelector("#panel-type").textContent = TYPE[object.type] ? t(TYPE[object.type]) : object.type || "—";
-  if (typeof object.p_real === "number") {
-    prob.hidden = false;
-    prob.textContent = `${(object.p_real * 100).toFixed(1)}% p_real`;
-  } else {
-    prob.hidden = true;
+  if (status) setTag(status, info.label, info.tag);
+  put("#panel-name", object.name);
+  put("#panel-type", TYPE[object.type] ? t(TYPE[object.type]) : object.type || "—");
+  if (prob) {
+    if (typeof object.p_real === "number") {
+      prob.hidden = false;
+      prob.textContent = `${(object.p_real * 100).toFixed(1)}% p_real`;
+    } else {
+      prob.hidden = true;
+    }
   }
-  const notes = document.querySelector("#panel-notes");
+  if (!notes) {
+    const shiftOnly = frame && baseline ? movement(object, baseline, frame) : null;
+    const moveOnly = shiftOnly == null ? "—" : `${shiftOnly.toFixed(1)}″`;
+    put("#panel-move", moveOnly);
+    put("#move-read", moveOnly);
+    put("#delta-move", shiftOnly == null ? t("noShift") : t("shiftOf", { value: shiftOnly.toFixed(1) }));
+    const hitOnly = frame ? detectionOn(object.object_id, frame.frame_id) : null;
+    const whereOnly = hitOnly ? place(hitOnly) : t("offFrame");
+    put("#panel-place", whereOnly);
+    put("#place-read", whereOnly);
+    return;
+  }
   notes.replaceChildren();
   const lines = [reasonOf(object)];
   if (object.catalog) lines.push(t("catalogLine", { name: object.catalog }));
@@ -688,13 +719,76 @@ function fillPanel() {
   }
   const shift = frame && baseline ? movement(object, baseline, frame) : null;
   const moveText = shift == null ? "—" : `${shift.toFixed(1)}″`;
-  document.querySelector("#panel-move").textContent = moveText;
-  document.querySelector("#move-read").textContent = moveText;
-  document.querySelector("#delta-move").textContent = shift == null ? t("noShift") : t("shiftOf", { value: shift.toFixed(1) });
+  put("#panel-move", moveText);
+  put("#move-read", moveText);
+  put("#delta-move", shift == null ? t("noShift") : t("shiftOf", { value: shift.toFixed(1) }));
   const hit = frame ? detectionOn(object.object_id, frame.frame_id) : null;
   const where = hit ? place(hit) : t("offFrame");
-  document.querySelector("#panel-place").textContent = where;
-  document.querySelector("#place-read").textContent = where;
+  put("#panel-place", where);
+  put("#place-read", where);
+}
+
+function markCompare(selector, kind) {
+  const svg = document.querySelector(selector);
+  if (!svg) return;
+  svg.replaceChildren();
+  if (!catalogContext) return;
+  const placed = goldTargets.get(activeTarget);
+  const target = targetOf();
+  const ra = selectedSource?.ra ?? placed?.ra_now ?? target.ra;
+  const dec = selectedSource?.dec ?? placed?.dec_now ?? target.dec;
+  const pixel = skyToPixel(catalogContext.wcs, ra, dec);
+  const { width, height } = catalogContext;
+  if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x > width || pixel.y > height) return;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  const radius = Math.min(width, height) * 0.16;
+  if (kind === "found") {
+    const glow = document.createElementNS(SVG, "circle");
+    glow.setAttribute("cx", String(pixel.x));
+    glow.setAttribute("cy", String(pixel.y));
+    glow.setAttribute("r", String(radius));
+    glow.setAttribute("fill", "none");
+    glow.setAttribute("stroke", "rgba(245, 196, 0, 0.45)");
+    glow.setAttribute("stroke-width", "1.1");
+    const ring = document.createElementNS(SVG, "circle");
+    ring.setAttribute("cx", String(pixel.x));
+    ring.setAttribute("cy", String(pixel.y));
+    ring.setAttribute("r", String(radius * 0.42));
+    ring.setAttribute("fill", "none");
+    ring.setAttribute("stroke", "#f5c400");
+    ring.setAttribute("stroke-width", "1.5");
+    const dot = document.createElementNS(SVG, "circle");
+    dot.setAttribute("cx", String(pixel.x));
+    dot.setAttribute("cy", String(pixel.y));
+    dot.setAttribute("r", String(radius * 0.12));
+    dot.setAttribute("fill", "#f5c400");
+    svg.append(glow, ring, dot);
+    return;
+  }
+  const ring = document.createElementNS(SVG, "circle");
+  ring.setAttribute("cx", String(pixel.x));
+  ring.setAttribute("cy", String(pixel.y));
+  ring.setAttribute("r", String(radius * 0.7));
+  ring.setAttribute("fill", "none");
+  ring.setAttribute("stroke", "#94a3b8");
+  ring.setAttribute("stroke-width", "1.2");
+  ring.setAttribute("stroke-dasharray", "2.2 1.6");
+  const arm = radius * 0.35;
+  for (const [x1, y1, x2, y2] of [
+    [pixel.x - arm, pixel.y - arm, pixel.x + arm, pixel.y + arm],
+    [pixel.x - arm, pixel.y + arm, pixel.x + arm, pixel.y - arm],
+  ]) {
+    const line = document.createElementNS(SVG, "line");
+    line.setAttribute("x1", String(x1));
+    line.setAttribute("y1", String(y1));
+    line.setAttribute("x2", String(x2));
+    line.setAttribute("y2", String(y2));
+    line.setAttribute("stroke", "#94a3b8");
+    line.setAttribute("stroke-width", "1.2");
+    svg.append(line);
+  }
+  svg.append(ring);
 }
 
 function fillCompare() {
@@ -715,37 +809,145 @@ function fillCompare() {
   }
   const now = document.querySelector("#cmp-now");
   const then = document.querySelector("#cmp-then");
-  now.src = skyFor(nowFrame);
-  then.src = skyFor(thenFrame);
-  document.querySelector("#cmp-now-label").textContent = t(blinkOn && !blinkShowNow ? "photoBlink" : "photoCurrent", { date: fecha(when(nowFrame)) });
-  document.querySelector("#cmp-then-label").textContent = t("photoBase", { date: fecha(when(thenFrame)) });
+  if (now) now.src = skyFor(nowFrame);
+  if (then) then.src = skyFor(thenFrame);
+  put("#cmp-now-label", t(blinkOn && !blinkShowNow ? "photoBlink" : "photoCurrent", { date: fecha(when(nowFrame)) }));
+  put("#cmp-then-label", t("photoBase", { date: fecha(when(thenFrame)) }));
+  markCompare("#cmp-now-marks", "found");
+  markCompare("#cmp-then-marks", "absent");
 
-  const recentIds = new Set(hits.filter((hit) => hit.frame_id === frame.frame_id).map((hit) => hit.object_id));
-  const baseIds = new Set(hits.filter((hit) => hit.frame_id === baseline.frame_id).map((hit) => hit.object_id));
-  const newcomers = [...recentIds]
-    .filter((id) => !baseIds.has(id))
-    .map((id) => byObject.get(id))
-    .filter(Boolean);
-  const candidates = newcomers.filter((object) => object.status === "Unidentified candidate");
-  const named = (candidates.length ? candidates : newcomers).map((object) => object.name);
-  document.querySelector("#event-new").textContent = named.length
-    ? t("newcomers", { names: named.join(", ") })
-    : t("noNewcomers");
-  document.querySelector("#event-new-foot").textContent = named.length ? t("seenRecent") : t("noNew");
+  fillFindings(thenFrame, nowFrame);
+  fillSummary(thenFrame, nowFrame);
+}
 
-  const shifts = [...byObject.values()]
-    .map((object) => ({ object, arcsec: movement(object, baseline, frame) }))
-    .filter((item) => item.arcsec != null);
-  const biggest = shifts.sort((a, b) => b.arcsec - a.arcsec)[0];
-  document.querySelector("#event-move").textContent = biggest
-    ? t("motionLine", { name: biggest.object.name, value: biggest.arcsec.toFixed(1) })
-    : t("noRepeat");
-  document.querySelector("#event-move-foot").textContent = biggest && biggest.arcsec >= 1 ? t("shiftMeasured") : t("noClearShift");
+let summaryToken = 0;
 
-  document.querySelector("#event-diff").textContent = mode === "difference" ? captionFor(frame) : t("diffOff");
-  document.querySelector("#event-diff-foot").textContent = mode === "difference" ? t("availableShort") : t("unpublished");
-  const findings = [named.length > 0, Boolean(biggest && biggest.arcsec >= 1), mode === "difference"].filter(Boolean).length;
-  document.querySelector("#cmp-count").textContent = t(findings === 1 ? "finding" : "findings", { n: findings });
+function summarySeason(row) {
+  if (!row || row.season == null || row.season === "") return null;
+  const season = Number(row.season);
+  return Number.isInteger(season) && season >= 0 ? season : null;
+}
+
+function frameCount(row) {
+  const count = Number(row?.n_frames);
+  return Number.isFinite(count) ? formatNumber(count) : "—";
+}
+
+function fillSummary(thenFrame, nowFrame) {
+  if (!document.querySelector("#summary")) return;
+  const token = ++summaryToken;
+  const nowSeason = summarySeason(nowFrame);
+  const thenSeason = summarySeason(thenFrame);
+  put("#sum-now-date", nowFrame && when(nowFrame) ? fecha(when(nowFrame)) : "—");
+  put("#sum-then-date", thenFrame && when(thenFrame) ? fecha(when(thenFrame)) : "—");
+  put("#sum-now-season", nowSeason == null ? "—" : t("summarySeason", { n: nowSeason }));
+  put("#sum-then-season", thenSeason == null ? "—" : t("summarySeasonBase", { n: thenSeason }));
+  put("#sum-now-frames", frameCount(nowFrame));
+  put("#sum-then-frames", frameCount(thenFrame));
+  put("#sum-now-new", formatNumber(0));
+  put("#sum-then-new", formatNumber(0));
+  put("#sum-now-rej", formatNumber(0));
+  put("#sum-then-rej", formatNumber(0));
+  put("#sum-new-line", t("summaryNewNone"));
+  const shown = shownDetector(nowFrame);
+  const before = meanFlux(thenSeason, shown);
+  const after = meanFlux(nowSeason, shown);
+  const changed = before && after && (after / before >= 1.25 || after / before <= 0.8);
+  put("#sum-bright-line", t(changed ? "summaryBrightOne" : "summaryBrightNone"));
+  put("#sum-span-line", t("summarySpan", { value: nowFrame && thenFrame ? intervalo(thenFrame, nowFrame) : "—" }));
+  Promise.all([
+    nowSeason == null ? [] : catalogFor(activeTarget, nowSeason).catch(() => []),
+    thenSeason == null ? [] : catalogFor(activeTarget, thenSeason).catch(() => []),
+  ]).then(([nowRows, thenRows]) => {
+    if (token !== summaryToken) return;
+    put("#sum-now-known", formatNumber(nowRows.length));
+    put("#sum-then-known", formatNumber(thenRows.length));
+  });
+}
+
+function seasonOf(row) {
+  if (!row || row.season == null || row.season === "") return null;
+  const season = Number(row.season);
+  return Number.isInteger(season) && season >= 1 ? season : null;
+}
+
+function skySep(ra1, dec1, ra2, dec2) {
+  const rad = Math.PI / 180;
+  const ra = ((Number(ra1) + Number(ra2)) / 2) * rad;
+  const dx = (Number(ra2) - Number(ra1)) * Math.cos(ra) * 3600;
+  const dy = (Number(dec2) - Number(dec1)) * 3600;
+  return Math.hypot(dx, dy);
+}
+
+function pathAt(season) {
+  return pathRows.find((row) => Number(row.season) === season) || null;
+}
+
+function flaggedSpectrum(row) {
+  const names = String(row.flag || "").split(",").map((item) => item.trim());
+  return names.includes("saturated") || names.includes("poor_fit");
+}
+
+function meanFlux(season, detectorNumber) {
+  const band = BANDS[detectorNumber];
+  if (!band) return null;
+  const rows = spectrumRows.filter((row) => {
+    if (Number(row.season) !== season || flaggedSpectrum(row)) return false;
+    const wave = Number(row.wavelength_um);
+    const flux = Number(row.flux_mjy);
+    return wave >= band[0] && wave <= band[1] && Number.isFinite(flux) && flux > 0;
+  });
+  if (!rows.length) return null;
+  return rows.reduce((sum, row) => sum + Number(row.flux_mjy), 0) / rows.length;
+}
+
+function fillFindings(thenFrame, nowFrame) {
+  const mag = selectedSource && Number.isFinite(Number(selectedSource.mag))
+    ? `${Number(selectedSource.mag).toFixed(1)} ${selectedSource.mag_band || ""}`.trim()
+    : "";
+  if (selectedSource) {
+    put("#event-new", mag
+      ? t("resultNamedMag", { name: selectedSource.name, catalog: selectedSource.catalog, mag })
+      : t("resultNamed", { name: selectedSource.name, catalog: selectedSource.catalog }));
+    put("#event-new-foot", t("resultMarked"));
+  } else {
+    put("#event-new", t("resultNone"));
+    put("#event-new-foot", t("resultUnmarked"));
+  }
+
+  const earlier = pathAt(seasonOf(thenFrame));
+  const later = pathAt(seasonOf(nowFrame));
+  let moved = false;
+  if (earlier && later && seasonOf(thenFrame) !== seasonOf(nowFrame)) {
+    const measured = [earlier, later].every((row) => row.ra_measured != null && row.dec_measured != null);
+    const pair = measured
+      ? [earlier.ra_measured, earlier.dec_measured, later.ra_measured, later.dec_measured]
+      : [earlier.ra_catalog, earlier.dec_catalog, later.ra_catalog, later.dec_catalog];
+    const arcsec = skySep(...pair);
+    moved = Number.isFinite(arcsec) && arcsec >= 1;
+    const value = Number.isFinite(arcsec) ? arcsec.toFixed(1) : "—";
+    put("#event-move", t(measured ? "resultShift" : "resultShiftCatalog", { value }));
+    put("#event-move-foot", moved ? t("shiftMeasured") : t("noClearShift"));
+  } else {
+    put("#event-move", t("resultNoShift"));
+    put("#event-move-foot", t("noClearShift"));
+  }
+
+  const shown = shownDetector(nowFrame);
+  const before = meanFlux(seasonOf(thenFrame), shown);
+  const after = meanFlux(seasonOf(nowFrame), shown);
+  let brighter = false;
+  if (before && after) {
+    const ratio = after / before;
+    brighter = ratio >= 1.25 || ratio <= 0.8;
+    put("#event-diff", t("resultBright", { ratio: ratio.toFixed(2) }));
+    put("#event-diff-foot", brighter ? t("resultChanged") : t("resultSteady"));
+  } else {
+    put("#event-diff", t("resultNoBright"));
+    put("#event-diff-foot", t("unpublished"));
+  }
+  const findings = [Boolean(selectedSource), moved, brighter].filter(Boolean).length;
+  put("#cmp-count", t(findings === 1 ? "finding" : "findings", { n: findings }));
 }
 
 function parseLayers(value) {
@@ -838,19 +1040,30 @@ function markLayers() {
   }
 }
 
+function paintCandidate(row) {
+  const chip = document.querySelector("#candidate-chip");
+  if (!chip) return;
+  chip.hidden = !row;
+  if (row) chip.textContent = `${t("candidateLabel")} ${row.name}`;
+}
+
 function showSource(row) {
   const readout = document.querySelector("#cnn-out");
   const notes = document.querySelector("#panel-notes");
   const name = document.querySelector("#panel-name");
+  paintCandidate(row);
   if (!row) {
-    notes.hidden = true;
-    name.hidden = true;
+    if (notes) notes.hidden = true;
+    if (name) name.hidden = true;
     return;
   }
   const mag = row.mag == null || row.mag === "" ? "—" : `${Number(row.mag).toFixed(1)} ${row.mag_band || ""}`.trim();
-  readout.textContent = t("catalogHit", { name: row.name, catalog: layerName(row.catalog), mag });
-  name.hidden = false;
-  name.textContent = row.name;
+  if (readout) readout.textContent = t("catalogHit", { name: row.name, catalog: layerName(row.catalog), mag });
+  if (name) {
+    name.hidden = false;
+    name.textContent = row.name;
+  }
+  if (!notes) return;
   notes.hidden = false;
   notes.replaceChildren();
   if (row.url) {
@@ -919,6 +1132,17 @@ function checkProjection(wcs) {
   }
 }
 
+function trajectoryFor(target) {
+  if (!pathCache.has(target)) {
+    const pending = trajectory(target).catch((error) => {
+      pathCache.delete(target);
+      throw error;
+    });
+    pathCache.set(target, pending);
+  }
+  return pathCache.get(target);
+}
+
 function spectrumFor(target) {
   if (!spectrumCache.has(target)) {
     const pending = spectra(target).catch((error) => {
@@ -969,40 +1193,278 @@ function drawSpectrum(rows) {
   }
 }
 
+function framesFor(target) {
+  if (!frameCache.has(target)) {
+    const pending = frames(target).catch((error) => {
+      frameCache.delete(target);
+      throw error;
+    });
+    frameCache.set(target, pending);
+  }
+  return frameCache.get(target);
+}
+
+function drawLightCurve(rows, exposures) {
+  const host = document.querySelector("#lightcurve");
+  const plot = document.querySelector("#lightcurve-plot");
+  if (!host || !plot) return;
+  plot.replaceChildren();
+  const byFrame = new Map((exposures || []).map((row) => [row.frame_id, row]));
+  let points = (rows || []).map((row) => ({
+    ...row,
+    detector: byFrame.get(row.frame_id)?.detector,
+    when: Date.parse(stamp(row.date_utc)),
+    flux: Number(row.flux_mjy),
+  })).filter((row) => Number.isFinite(row.when) && Number.isFinite(row.flux));
+  if (typeof detector === "number" && detector >= 1 && detector <= 6) {
+    const matched = points.filter((row) => Number(row.detector) === detector);
+    if (matched.length) points = matched;
+  }
+  if (!points.length) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const width = 280;
+  const height = 110;
+  const pad = 16;
+  const xs = points.map((row) => row.when);
+  const ys = points.map((row) => row.flux);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const seasons = [...new Set(points.map((row) => row.season))].sort((a, b) => a - b);
+  const colors = ["#0B3D91", "#9BB6E6", "#FC3D21", "#6B7280", "#111827"];
+  const xOf = (value) => pad + ((value - minX) / (maxX - minX || 1)) * (width - pad * 2);
+  const yOf = (value) => height - pad - ((value - minY) / (maxY - minY || 1)) * (height - pad * 2);
+  for (const season of seasons) {
+    const color = colors[seasons.indexOf(season) % colors.length];
+    for (const row of points.filter((item) => item.season === season)) {
+      const hollow = row.flag != null && String(row.flag).trim() !== "";
+      const dot = document.createElementNS(SVG, "circle");
+      dot.setAttribute("cx", String(xOf(row.when)));
+      dot.setAttribute("cy", String(yOf(row.flux)));
+      dot.setAttribute("r", "2.4");
+      dot.setAttribute("fill", hollow ? "none" : color);
+      dot.setAttribute("stroke", color);
+      dot.setAttribute("stroke-width", "1.2");
+      plot.append(dot);
+    }
+  }
+}
+
+function parseRa(text) {
+  const raw = String(text || "").trim().replace(/−/g, "-");
+  if (!raw) return null;
+  const sexagesimal = raw.match(/^([+-]?\d+(?:\.\d+)?)[h:](\d+(?:\.\d+)?)[m:](\d+(?:\.\d+)?)s?$/i);
+  if (sexagesimal) {
+    const sign = sexagesimal[1].startsWith("-") ? -1 : 1;
+    const hours = Math.abs(Number(sexagesimal[1])) + Number(sexagesimal[2]) / 60 + Number(sexagesimal[3]) / 3600;
+    return sign * hours * 15;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseDec(text) {
+  const raw = String(text || "").trim().replace(/−/g, "-").replace(/º/g, "°");
+  if (!raw) return null;
+  const sexagesimal = raw.match(/^([+-]?\d+(?:\.\d+)?)[d°:](\d+(?:\.\d+)?)[m′'](\d+(?:\.\d+)?)[s″"]?$/i);
+  if (sexagesimal) {
+    const sign = sexagesimal[1].startsWith("-") ? -1 : 1;
+    return sign * (Math.abs(Number(sexagesimal[1])) + Number(sexagesimal[2]) / 60 + Number(sexagesimal[3]) / 3600);
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function separationDeg(ra1, dec1, ra2, dec2) {
+  const toRad = Math.PI / 180;
+  const d1 = Number(dec1) * toRad;
+  const d2 = Number(dec2) * toRad;
+  const cosc = Math.sin(d1) * Math.sin(d2) + Math.cos(d1) * Math.cos(d2) * Math.cos((Number(ra1) - Number(ra2)) * toRad);
+  return (Math.acos(Math.min(1, Math.max(-1, cosc))) * 180) / Math.PI;
+}
+
+function fieldFor(ra, dec) {
+  let best = null;
+  let bestSep = Infinity;
+  for (const row of goldTargets.values()) {
+    const half = (Number(row.size_deg) || 15 / 60) / 2;
+    const sep = separationDeg(ra, dec, row.ra_now, row.dec_now);
+    if (sep <= half + 1e-9 && sep < bestSep) {
+      best = row;
+      bestSep = sep;
+    }
+  }
+  return best;
+}
+
+function pixelOf(point) {
+  const placed = goldTargets.get(activeTarget);
+  if (!placed?.wcs_json || !point) return null;
+  const field = fieldFor(point.ra, point.dec);
+  if (!field || field.target_id !== activeTarget) return null;
+  let wcs = placed.wcs_json;
+  if (typeof wcs === "string") wcs = JSON.parse(wcs);
+  return skyToPixel(wcs, point.ra, point.dec);
+}
+
+function markFov() {
+  const group = document.querySelector("#fov");
+  if (!group) return;
+  for (const button of group.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", Number(button.dataset.fov) === fovArcmin ? "true" : "false");
+  }
+}
+
+function paintSearch() {
+  const note = document.querySelector("#search-note");
+  if (!note) return;
+  if (searchState === "bad") note.textContent = t("searchBad");
+  else if (searchState === "miss") note.textContent = t("searchMiss");
+  else if (searchState === "hit") {
+    const placed = goldTargets.get(activeTarget);
+    note.textContent = t("searchHit", { name: placed?.name || activeTarget });
+  } else note.textContent = "";
+}
+
+function applyFrame() {
+  const sky = document.querySelector("#sky");
+  const stage = document.querySelector("#sky-stage");
+  if (!sky || !stage) return;
+  const width = image.naturalWidth || 146;
+  const height = image.naturalHeight || 146;
+  let fx = 0.5;
+  let fy = 0.5;
+  const pixel = pixelOf(searchPoint);
+  if (pixel && width && height) {
+    fx = pixel.x / width;
+    fy = pixel.y / height;
+  }
+  const zoom = 15 / fovArcmin;
+  const box = sky.clientWidth || stage.parentElement?.clientWidth || 0;
+  const tall = sky.clientHeight || box * 0.75;
+  if (!box) return;
+  const size = box * zoom;
+  stage.style.transform = "none";
+  stage.style.width = `${size}px`;
+  stage.style.height = `${size}px`;
+  stage.style.left = `${box / 2 - fx * size}px`;
+  stage.style.top = `${tall / 2 - fy * size}px`;
+}
+
+function drawCross() {
+  const old = marks.querySelector(".search-cross");
+  if (old) old.remove();
+  const pixel = pixelOf(searchPoint);
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (!pixel || !width || !height) return;
+  if (pixel.x < 0 || pixel.y < 0 || pixel.x > width || pixel.y > height) return;
+  const arm = Math.max(width, height) * 0.035;
+  const node = document.createElementNS(SVG, "g");
+  node.setAttribute("class", "search-cross");
+  node.setAttribute("transform", `translate(${pixel.x} ${pixel.y})`);
+  const horizontal = document.createElementNS(SVG, "line");
+  horizontal.setAttribute("x1", String(-arm));
+  horizontal.setAttribute("x2", String(arm));
+  const vertical = document.createElementNS(SVG, "line");
+  vertical.setAttribute("y1", String(-arm));
+  vertical.setAttribute("y2", String(arm));
+  node.append(horizontal, vertical);
+  marks.append(node);
+}
+
+function writeUrl(frame) {
+  const url = new URL(location.href);
+  url.searchParams.set("target", activeTarget);
+  url.searchParams.set("detector", String(detector));
+  url.searchParams.set("season", seasonToken(frame));
+  url.searchParams.set("mode", mode);
+  url.searchParams.set("layers", LAYERS.filter((id) => layersOn.has(id)).join(","));
+  if (searchPoint) {
+    url.searchParams.set("ra", String(searchPoint.ra));
+    url.searchParams.set("dec", String(searchPoint.dec));
+    url.searchParams.set("fov", String(fovArcmin));
+  } else {
+    url.searchParams.delete("ra");
+    url.searchParams.delete("dec");
+    url.searchParams.delete("fov");
+  }
+  url.searchParams.delete("region");
+  url.searchParams.delete("frame");
+  history.replaceState(null, "", url);
+}
+
 function drawCatalog(rows, picture) {
   marks.replaceChildren();
   const width = picture?.naturalWidth;
   const height = picture?.naturalHeight;
   const placed = goldTargets.get(activeTarget);
-  if (!width || !height || !placed?.wcs_json) return;
+  if (!width || !height || !placed?.wcs_json) {
+    listedSources = [];
+    catalogContext = null;
+    return;
+  }
   let wcs = placed.wcs_json;
   if (typeof wcs === "string") wcs = JSON.parse(wcs);
   checkProjection(wcs);
   const raster = rasterOf(picture);
   marks.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  marks.setAttribute("preserveAspectRatio", "xMidYMid slice");
-  const visible = rows.filter((row) => {
+  marks.setAttribute("preserveAspectRatio", "none");
+  catalogContext = { wcs, width, height, raster };
+  listedSources = rows.filter((row) => {
     if (!layersOn.has(row.catalog)) return false;
     const limit = magLimit(row.catalog);
     return limit == null || row.mag == null || row.mag === "" || Number(row.mag) <= limit;
   });
-  for (const row of visible) {
-    const pixel = skyToPixel(wcs, row.ra, row.dec);
-    if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) continue;
-    if (neutralPixel(raster, pixel.x, pixel.y)) continue;
-    const node = markerShape(row.catalog, pixel.x, pixel.y);
-    node.dataset.name = row.name;
-    if (selectedSource && selectedSource.catalog === row.catalog && selectedSource.name === row.name) {
-      node.classList.add("selected");
+  paintChosen();
+}
+
+function paintChosen() {
+  for (const marker of marks.querySelectorAll(".marker")) marker.remove();
+  if (!selectedSource || !catalogContext) return;
+  const pixel = skyToPixel(catalogContext.wcs, selectedSource.ra, selectedSource.dec);
+  const { width, height } = catalogContext;
+  if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) return;
+  if (neutralPixel(catalogContext.raster, pixel.x, pixel.y)) return;
+  const node = markerShape(selectedSource.catalog, pixel.x, pixel.y);
+  node.classList.add("selected");
+  marks.append(node);
+  const chip = document.querySelector("#candidate-chip");
+  const stage = document.querySelector("#sky-stage");
+  if (!chip || !stage) return;
+  const x = stage.offsetLeft + (pixel.x / width) * stage.offsetWidth;
+  const y = stage.offsetTop + (pixel.y / height) * stage.offsetHeight;
+  chip.style.left = `${Math.max(8, x - 8)}px`;
+  chip.style.top = `${Math.max(8, y - 34)}px`;
+  markCompare("#cmp-now-marks", "found");
+  markCompare("#cmp-then-marks", "absent");
+}
+
+function chooseSource(event) {
+  if (!catalogContext || !listedSources.length) return;
+  const matrix = marks.getScreenCTM();
+  if (!matrix) return;
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+  let best = null;
+  let bestDistance = Infinity;
+  for (const row of listedSources) {
+    const pixel = skyToPixel(catalogContext.wcs, row.ra, row.dec);
+    if (!pixel) continue;
+    const distance = Math.hypot(pixel.x - point.x, pixel.y - point.y);
+    if (distance < bestDistance) {
+      best = row;
+      bestDistance = distance;
     }
-    node.addEventListener("click", () => {
-      selectedSource = row;
-      showSource(row);
-      for (const marker of marks.querySelectorAll(".marker")) marker.classList.remove("selected");
-      node.classList.add("selected");
-    });
-    marks.append(node);
   }
+  const limit = Math.max(12, catalogContext.width * 0.08);
+  if (!best || bestDistance > limit) return;
+  selectedSource = best;
+  showSource(best);
+  paintChosen();
 }
 
 async function render() {
@@ -1021,7 +1483,13 @@ async function render() {
   const shown = shownDetector(frame);
   const name = placed?.name || target.name;
   image.alt = altFor(frame, name);
-  caption.textContent = captionFor(frame);
+  if (caption) caption.textContent = captionFor(frame);
+  const first = sequence[0];
+  const last = sequence[sequence.length - 1];
+  const start = first && mode === "difference" ? (sumAt(first.detector, first.season_a) || first) : first;
+  const end = last && mode === "difference" ? (sumAt(last.detector, last.season_b) || last) : last;
+  put("#tick-start", start && when(start) ? fecha(when(start)) : "—");
+  put("#tick-end", end && when(end) ? fecha(when(end)) : "—");
   showNotes(frame);
   const readout = document.querySelector("#cnn-out");
   slider.value = String(index);
@@ -1030,15 +1498,7 @@ async function render() {
   document.querySelector("#sky-ra").textContent = hms(placed?.ra_now ?? target.ra);
   document.querySelector("#sky-dec").textContent = dms(placed?.dec_now ?? target.dec);
   fillEpochs();
-  const url = new URL(location.href);
-  url.searchParams.set("target", activeTarget);
-  url.searchParams.set("detector", String(detector));
-  url.searchParams.set("season", seasonToken(frame));
-  url.searchParams.set("mode", mode);
-  url.searchParams.set("layers", LAYERS.filter((id) => layersOn.has(id)).join(","));
-  url.searchParams.delete("region");
-  url.searchParams.delete("frame");
-  history.replaceState(null, "", url);
+  writeUrl(frame);
   fillPanel();
   fillCompare();
   markDetectors();
@@ -1054,6 +1514,7 @@ async function render() {
       selectedSource = sources.find((row) => row.catalog === selectedSource.catalog && row.name === selectedSource.name) || null;
     }
     drawCatalog(sources, picture);
+    drawCross();
     if (selectedSource) showSource(selectedSource);
     else {
       showSource(null);
@@ -1064,15 +1525,28 @@ async function render() {
   } catch (error) {
     console.error(error);
     marks.replaceChildren();
+    drawCross();
   }
   try {
-    const points = await spectrumFor(activeTarget);
+    const [points, exposures, path] = await Promise.all([
+      spectrumFor(activeTarget),
+      framesFor(activeTarget),
+      trajectoryFor(activeTarget),
+    ]);
     if (token !== viewToken) return;
+    spectrumRows = points;
+    pathRows = path;
     drawSpectrum(points);
+    drawLightCurve(points, exposures);
+    fillCompare();
   } catch (error) {
     console.error(error);
     drawSpectrum([]);
+    drawLightCurve([], []);
   }
+  applyFrame();
+  markFov();
+  paintSearch();
   armBlink(pair, pictures);
   loadImage(pngUrl(sequence[index - 1]));
   loadImage(pngUrl(sequence[index + 1]));
@@ -1088,7 +1562,7 @@ function setPlaying(playing) {
   clearInterval(timer);
   timer = 0;
   if (mode === "blink") return;
-  playButton.textContent = playing ? t("pause") : t("play");
+  if (playButton) playButton.textContent = playing ? t("pause") : t("play");
   if (playing) timer = setInterval(() => move(1), 900);
 }
 
@@ -1122,7 +1596,7 @@ function sample(list, count) {
 
 function updateGifLabel() {
   const seconds = ((gifFrames.length || gifCount) * gifMs) / 1000;
-  document.querySelector("#gif-duration").textContent = t("duration", { seconds: seconds.toFixed(1) });
+  put("#gif-duration", t("duration", { seconds: seconds.toFixed(1) }));
 }
 
 function restartPreview() {
@@ -1130,7 +1604,9 @@ function restartPreview() {
   gifFrames = sample(sequence, gifCount);
   gifStep = 0;
   gifBlob = null;
-  document.querySelector("#gif-save").disabled = true;
+  const save = document.querySelector("#gif-save");
+  if (!save) return;
+  save.disabled = true;
   const available = document.querySelector("#gif-available");
   if (available) available.textContent = t("captures", { n: sequence.length });
   updateGifLabel();
@@ -1190,6 +1666,7 @@ function saveGif() {
 
 function renderRegions() {
   const host = document.querySelector("#region-cards");
+  if (!host) return;
   host.replaceChildren();
   for (const target of TARGETS) {
     const active = target.id === activeTarget;
@@ -1212,13 +1689,31 @@ function renderRegions() {
     badge.className = active ? "tag amber" : "tag";
     badge.textContent = active ? t("inFocus") : t("available");
     head.append(title, badge);
+    const info = guide?.targets?.find((item) => item.id === target.id);
+    const placed = goldTargets.get(target.id);
     const text = document.createElement("p");
-    text.textContent = t(`blurb_${target.id}`);
+    text.textContent = info?.what_to_look_at || t(`blurb_${target.id}`);
+    const coords = document.createElement("p");
+    coords.className = "card-coords";
+    const ra = placed?.ra_now ?? info?.facts?.ra_now ?? target.ra;
+    const dec = placed?.dec_now ?? info?.facts?.dec_now ?? target.dec;
+    coords.textContent = `RA ${hms(ra)}   Dec ${dms(dec)}`;
+    const look = document.createElement("p");
+    look.className = "card-look";
+    look.textContent = info?.how_to_look?.text || "";
+    const kindKey = { motion: "kindMotion", spectrum: "kindSpectrum", brightness: "kindBrightness" }[info?.kind];
+    const kind = document.createElement("span");
+    if (kindKey) {
+      kind.className = "tag indigo";
+      kind.textContent = t(kindKey);
+    }
     const button = document.createElement("button");
     button.type = "button";
     button.className = active ? "amber wide" : "soft wide";
     button.textContent = active ? t("viewing") : t("loadTarget");
     button.addEventListener("click", () => {
+      searchPoint = null;
+      searchState = "";
       activeTarget = target.id;
       const season = openingSeason(target.id);
       openRegion(target.id, {
@@ -1228,14 +1723,17 @@ function renderRegions() {
         season,
       });
     });
-    card.append(head, text, button);
+    card.append(head, ...(kindKey ? [kind] : []), text, coords, look, button);
     host.append(card);
   }
 }
 
 function renderCatalog() {
-  document.querySelector("#rows").replaceChildren();
-  document.querySelector("#catalog-status").textContent = t("catalogLater");
+  const rows = document.querySelector("#rows");
+  const status = document.querySelector("#catalog-status");
+  if (!rows || !status) return;
+  rows.replaceChildren();
+  status.textContent = t("catalogLater");
 }
 
 async function focusObject(object) {
@@ -1276,17 +1774,119 @@ function choose(group, pressed) {
   }
 }
 
-playButton.addEventListener("click", () => togglePlay());
+function csvCell(value) {
+  if (value == null) return "";
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function downloadRows(filename, rows) {
+  if (!rows?.length) return false;
+  const keys = Object.keys(rows[0]);
+  const lines = [keys.join(",")];
+  for (const row of rows) lines.push(keys.map((key) => csvCell(row[key])).join(","));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+  return true;
+}
+
+function setFov(value) {
+  fovArcmin = value;
+  markFov();
+  applyFrame();
+  if (sequence[index]) writeUrl(sequence[index]);
+}
+
+document.querySelector("#search-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const ra = parseRa(document.querySelector("#search-ra").value);
+  const dec = parseDec(document.querySelector("#search-dec").value);
+  if (ra == null || dec == null) {
+    searchState = "bad";
+    searchPoint = null;
+    paintSearch();
+    return;
+  }
+  searchPoint = { ra, dec };
+  const field = fieldFor(ra, dec);
+  if (!field) {
+    searchState = "miss";
+    paintSearch();
+    if (sequence[index]) writeUrl(sequence[index]);
+    return;
+  }
+  searchState = "hit";
+  await openRegion(field.target_id, { scroll: true });
+});
+document.querySelector("#fov").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  const value = Number(button?.dataset.fov);
+  if (![3, 10, 15].includes(value)) return;
+  fovArcmin = value;
+  markFov();
+  applyFrame();
+  if (sequence[index]) writeUrl(sequence[index]);
+});
+playButton?.addEventListener("click", () => togglePlay());
 slider.addEventListener("input", () => {
   setPlaying(false);
   index = Number(slider.value);
   render();
 });
-document.querySelector("#mag-reach").addEventListener("input", (event) => {
+marks.addEventListener("click", chooseSource);
+document.querySelector("#sky-search")?.addEventListener("click", () => {
+  const form = document.querySelector("#search-form");
+  if (!form) return;
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.querySelector("#search-ra")?.focus();
+});
+document.querySelector("#fit-field")?.addEventListener("click", () => setFov(15));
+document.querySelector("#cycle-fov")?.addEventListener("click", () => {
+  const order = [15, 10, 3];
+  setFov(order[(Math.max(order.indexOf(fovArcmin), 0) + 1) % order.length]);
+});
+document.querySelector("#compare-images")?.addEventListener("click", () => {
+  const box = document.querySelector("#comparador");
+  if (!box) return;
+  box.hidden = false;
+  fillCompare();
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+document.querySelector("#csv")?.addEventListener("click", () => {
+  const rows = selectedSource ? [selectedSource] : listedSources;
+  if (!downloadRows(`${activeTarget}-catalog.csv`, rows)) put("#cnn-out", t("csvEmpty"));
+});
+document.querySelector("#csv-pair")?.addEventListener("click", async () => {
+  const frame = sequence[index];
+  const baseline = sequence[0];
+  if (!frame) {
+    put("#pair-note", t("csvEmpty"));
+    return;
+  }
+  const current = catalogSeason(frame);
+  const base = baseline?.season ?? current;
+  try {
+    const [left, right] = await Promise.all([
+      catalogs(activeTarget, base),
+      catalogs(activeTarget, current),
+    ]);
+    const savedLeft = downloadRows(`${activeTarget}-baseline-s${base}.csv`, left);
+    const savedRight = downloadRows(`${activeTarget}-current-s${current}.csv`, right);
+    put("#pair-note", savedLeft || savedRight ? "" : t("csvEmpty"));
+  } catch (error) {
+    put("#pair-note", t("csvEmpty"));
+    console.error(error);
+  }
+});
+document.querySelector("#mag-reach")?.addEventListener("input", (event) => {
   magReach = Number(event.target.value);
   render();
 });
-document.querySelector("#layers").addEventListener("click", (event) => {
+document.querySelector("#layers")?.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   const id = button.dataset.layer;
@@ -1296,7 +1896,7 @@ document.querySelector("#layers").addEventListener("click", (event) => {
   markLayers();
   render();
 });
-document.querySelector("#modes").addEventListener("click", (event) => {
+document.querySelector("#modes")?.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
   const next = button.dataset.mode;
@@ -1307,7 +1907,7 @@ document.querySelector("#modes").addEventListener("click", (event) => {
   blinkPaused = false;
   applyView(season);
 });
-document.querySelector("#detectors").addEventListener("click", (event) => {
+document.querySelector("#detectors")?.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
   const value = button.dataset.detector;
@@ -1324,8 +1924,8 @@ document.querySelector("#detectors").addEventListener("click", (event) => {
   blinkPaused = false;
   applyView(season);
 });
-discardedBox.addEventListener("change", () => render());
-document.querySelector("#blink").addEventListener("click", () => {
+discardedBox?.addEventListener("change", () => render());
+document.querySelector("#blink")?.addEventListener("click", () => {
   blinkOn = !blinkOn;
   const button = document.querySelector("#blink");
   button.textContent = blinkOn ? t("blinkPause") : t("blink");
@@ -1340,11 +1940,11 @@ document.querySelector("#blink").addEventListener("click", () => {
     fillCompare();
   }
 });
-document.querySelector("#blink-jump").addEventListener("click", () => {
+document.querySelector("#blink-jump")?.addEventListener("click", () => {
   document.querySelector("#comparador").scrollIntoView({ behavior: "smooth" });
   if (!blinkOn) document.querySelector("#blink").click();
 });
-document.querySelector("#blink-speed").addEventListener("click", (event) => {
+document.querySelector("#blink-speed")?.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   choose(document.querySelector("#blink-speed"), button);
@@ -1354,25 +1954,31 @@ document.querySelector("#blink-speed").addEventListener("click", (event) => {
     document.querySelector("#blink").click();
   }
 });
-document.querySelector("#gif-count").addEventListener("click", (event) => {
+document.querySelector("#gif-count")?.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   choose(document.querySelector("#gif-count"), button);
   gifCount = Number(button.dataset.n);
   restartPreview();
 });
-document.querySelector("#gif-speed").addEventListener("click", (event) => {
+document.querySelector("#gif-speed")?.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   choose(document.querySelector("#gif-speed"), button);
   gifMs = Number(button.dataset.ms);
   restartPreview();
 });
-document.querySelector("#gif-make").addEventListener("click", () => makeGif());
-document.querySelector("#gif-save").addEventListener("click", () => saveGif());
+document.querySelector("#gif-make")?.addEventListener("click", () => makeGif());
+document.querySelector("#gif-save")?.addEventListener("click", () => saveGif());
 document.querySelector("#analyze").addEventListener("click", () => {
-  const object = byObject.get(selectedId);
   const out = document.querySelector("#cnn-out");
+  if (selectedSource) {
+    showSource(selectedSource);
+    const score = Number(selectedSource.p_real);
+    if (Number.isFinite(score)) out.textContent += t("score", { value: (score * 100).toFixed(1) });
+    return;
+  }
+  const object = byObject.get(selectedId);
   if (!object) {
     out.textContent = t("pickMarker");
     return;
@@ -1381,8 +1987,6 @@ document.querySelector("#analyze").addEventListener("click", () => {
   const scored = Number.isFinite(score) ? t("score", { value: (score * 100).toFixed(1) }) : t("noScore");
   out.textContent = `${object.name}: ${statusOf(object).label}.${scored} ${reasonOf(object)}`;
 });
-document.querySelector("#help-open").addEventListener("click", () => document.querySelector("#help").showModal());
-document.querySelector("#help-close").addEventListener("click", () => document.querySelector("#help").close());
 window.addEventListener("keydown", (event) => {
   if (event.target.closest("input, textarea")) return;
   if (event.key === "ArrowRight") {
@@ -1404,8 +2008,8 @@ onChange(() => {
   apply();
   renderRegions();
   if (regionList.length) renderCatalog();
-  playButton.textContent = mode === "blink" && !blinkPaused ? t("pause") : timer ? t("pause") : t("play");
-  document.querySelector("#blink").textContent = blinkOn ? t("blinkPause") : t("blink");
+  if (playButton) playButton.textContent = mode === "blink" && !blinkPaused ? t("pause") : timer ? t("pause") : t("play");
+  put("#blink", blinkOn ? t("blinkPause") : t("blink"));
   if (sequence.length) {
     updateGifLabel();
     const available = document.querySelector("#gif-available");
@@ -1421,8 +2025,22 @@ try {
   guide = texts;
   goldTargets.clear();
   for (const row of found) goldTargets.set(row.target_id, row);
+  const askedRa = parseRa(params.get("ra"));
+  const askedDec = parseDec(params.get("dec"));
+  const askedFov = Number(params.get("fov"));
+  if ([3, 10, 15].includes(askedFov)) fovArcmin = askedFov;
+  if (params.get("ra")) document.querySelector("#search-ra").value = params.get("ra");
+  if (params.get("dec")) document.querySelector("#search-dec").value = params.get("dec");
+  let wanted = params.get("target") || params.get("region") || "barnard";
+  if (askedRa != null && askedDec != null) {
+    searchPoint = { ra: askedRa, dec: askedDec };
+    const field = fieldFor(askedRa, askedDec);
+    if (field) {
+      searchState = "hit";
+      wanted = field.target_id;
+    } else searchState = "miss";
+  }
   renderCatalog();
-  const wanted = params.get("target") || params.get("region") || "barnard";
   const match = found.find((row) => row.target_id === wanted) || found[0];
   if (match) activeTarget = match.target_id;
   detector = params.has("detector")
@@ -1431,16 +2049,17 @@ try {
   mode = params.has("mode") ? parseMode(params.get("mode")) : openingMode(activeTarget);
   layersOn = parseLayers(params.has("layers") ? params.get("layers") : null);
   if (!params.has("season")) params.set("season", openingSeason(activeTarget));
-  document.querySelector("#updated").textContent = info?.run_date_utc
+  put("#updated", info?.run_date_utc
     ? t("tablesLoaded", { date: info.run_date_utc })
-    : t("tablesLoaded", { date: "—" });
+    : t("tablesLoaded", { date: "—" }));
   if (match) await openRegion(match.target_id, { detector, season: params.get("season"), mode });
   if (location.hash) {
     const place = document.querySelector(location.hash);
     if (place) place.scrollIntoView();
   }
 } catch (error) {
-  document.querySelector("#updated").textContent = t("tablesDown");
-  document.querySelector("#catalog-status").textContent = t("tablesDown");
+  put("#updated", t("tablesDown"));
+  put("#catalog-status", t("tablesDown"));
+  put("#cnn-out", t("tablesDown"));
   console.error(error);
 }
