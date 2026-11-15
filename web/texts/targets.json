@@ -373,7 +373,7 @@
         "text": "Detector 1, difference of season 3 minus season 1: the red ring around its white center is the light it gained."
       },
       "watch_out": [
-        "It is so bright that its center is always saturated in detectors 2, 4, 5 and 6, and sometimes in detectors 1 and 3: the camera got more light than it can count. Those pixels are painted with the brightest color.",
+        "It is so bright that its center is always saturated in detectors 2, 3, 4, 5 and 6, and sometimes in detector 1: the camera got more light than it can count. Those pixels are painted with the brightest color.",
         "In single seasons, compare its glow, not its center: a brighter star looks bigger."
       ],
       "facts": {

@@ -438,6 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target", nargs="+", help="Target ids (default: every one in gold).")
     parser.add_argument("--report", type=Path, default=REPORT_PATH)
     parser.add_argument("--summary", type=Path, default=SUMMARY_PATH)
+    parser.add_argument("--images", type=Path, default=IMAGE_DIR)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -457,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         if target_id in guides:
             defaults = default_cuts(measured, cuts, grids[target_id].pixel_shape)
             write_plot(args.gold, guides[target_id], measured, defaults, wrong,
-                       IMAGE_DIR / f"markers_{target_id}.png")  # fmt: skip
+                       args.images / f"markers_{target_id}.png")  # fmt: skip
         log.info("%s: limits %s, %d out of place", target_id, cuts, len(wrong))
 
     args.report.write_text(report(results), encoding="utf-8", newline="\n")
