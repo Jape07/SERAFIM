@@ -1,56 +1,35 @@
 """The repo skeleton every role builds on: config, modules and CLI."""
 
 import importlib
-from datetime import date
-from pathlib import Path
 
 import pytest
-import yaml
 
 from serafim.cli import main
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def load_config():
-    return yaml.safe_load((ROOT / "config" / "regions.yaml").read_text(encoding="utf-8"))
+from serafim.config import CONFIG_PATH, ROOT, load_config
 
 
-def test_config_has_the_pole():
-    regions = {r["id"]: r for r in load_config()["regions"]}
-    assert regions["pole"]["ra"] == pytest.approx(270.0)
-    assert regions["pole"]["dec"] == pytest.approx(66.56)
+def test_the_pipeline_reads_config_targets_yaml():
+    assert CONFIG_PATH == ROOT / "config" / "targets.yaml"
+    assert not (ROOT / "config" / "regions.yaml").exists(), "regions.yaml was retired"
 
 
-def test_region_ids_are_unique():
-    ids = [r["id"] for r in load_config()["regions"]]
-    assert len(ids) == len(set(ids))
-
-
-def test_the_three_watched_regions():
-    assert [r["id"] for r in load_config()["regions"]] == ["pole", "asteroid", "variable_star"]
-
-
-@pytest.mark.parametrize("region", load_config()["regions"], ids=lambda r: r["id"])
-def test_region_is_complete(region):
-    assert {"id", "name", "ra", "dec", "why"} <= set(region)
-    assert 0 <= region["ra"] < 360
-    assert -90 <= region["dec"] <= 90
-
-
-@pytest.mark.parametrize("region", load_config()["regions"], ids=lambda r: r["id"])
-def test_key_window_is_two_ordered_utc_dates(region):
-    if "key_window_utc" not in region:
-        pytest.skip("no key window")
-    start, end = (date.fromisoformat(str(day)) for day in region["key_window_utc"])
-    assert start <= end
+def test_config_has_the_five_challenge_targets():
+    config = load_config()
+    ids = [target["id"] for target in config["targets"]]
+    assert ids == ["barnard", "eps_indi_b", "wise_0855", "rw_aur", "r_dra"]
+    for target in config["targets"]:
+        assert 0 <= target["ra_now"] < 360
+        assert -90 <= target["dec_now"] <= 90
+    assert {"cutout_size_deg", "max_frames_per_target", "collections"} <= set(config["settings"])
 
 
 @pytest.mark.parametrize(
     "module",
     [
         "serafim.contract",
+        "serafim.config",
         "serafim.bronze",
+        "serafim.bronze.download",
         "serafim.silver",
         "serafim.gold",
         "serafim.validation.catalogs",
