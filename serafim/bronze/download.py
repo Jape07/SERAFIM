@@ -30,6 +30,11 @@ When IRSA's search (SIA) does not answer, the frame list saved in
 config/spherex_frames/<target>.parquet is used instead (`python -m serafim bronze
 --save-frame-lists` writes them; the file service usually still answers). Without a saved list,
 bronze goes on with the cutouts already on disk; with nothing at all, that target fails.
+
+The answer of the search is kept in data/catalog_cache/spherex_sia/ and reused, so new frames
+only show up when it is asked again: `refresh=True` (`--refresh-search`, the weekly run of
+publish.yml) asks IRSA again. If that fails, the answer of the last run is used, then the saved
+list, then the cutouts on disk, as above.
 """
 
 from __future__ import annotations
@@ -171,11 +176,13 @@ def download(
     root: Path | None = None,
     frames=None,
     fetch=None,
+    refresh: bool = False,
 ) -> int:
     """Download the missing cutouts and rewrite the manifest. Return how many files are new.
 
     `frames(center, collections)` and `fetch(job)` are injection points for tests; the real
-    ones are `spherex_frames()` and `fetch_cutout()`, which call IRSA.
+    ones are `spherex_frames()` and `fetch_cutout()`, which call IRSA. `refresh` asks IRSA's
+    search again instead of reusing its cached answer (to find new frames and seasons).
 
     Raises:
         ArchiveError: if a search failed (after the other targets were done) or if there is
@@ -192,6 +199,7 @@ def download(
         "workers": parallel_workers(settings),
         "find": frames or spherex_frames,
         "fetch": fetch or fetch_cutout,
+        "refresh": refresh,
     }
     rows = {(row["target_id"], row["obs_id"]): row for row in read_manifest(root)}
     downloaded = on_disk = 0
@@ -250,8 +258,26 @@ def save_frame_lists(target_id: str | None = None, *, root: Path | None = None,
     return written
 
 
+def sia_cache_path(center: SkyCoord, collections: list[str]) -> Path:
+    """Where spherex_frames() keeps its answer for this position (the validation.catalogs cache,
+    relative to the working directory like that cache). tests/test_bronze.py checks that it is
+    the file spherex_frames() really writes."""
+    from serafim.validation import catalogs, targets
+
+    icrs = targets._plain(center)
+    params = {
+        "ra": round(float(icrs.ra.deg), 5),
+        "dec": round(float(icrs.dec.deg), 5),
+        "collections": list(collections),
+    }
+    return catalogs._cache_path("spherex_sia", params)
+
+
 def _search(target: dict, rows: dict, context: dict) -> pd.DataFrame | None:
     """The frames of a target from IRSA; if the search fails, from the saved list.
+
+    With `context["refresh"]` the cached answer is set aside and IRSA is asked again; if that
+    fails, the answer of the last run comes back and is used (it is newer than the saved list).
 
     None means: the search failed, there is no saved list, but cutouts of this target are on
     disk, so bronze goes on with them. With nothing at all it is an ArchiveError.
@@ -259,10 +285,24 @@ def _search(target: dict, rows: dict, context: dict) -> pd.DataFrame | None:
     root, settings = context["root"], context["settings"]
     name = str(target["id"])
     center = SkyCoord(float(target["ra_now"]) * u.deg, float(target["dec_now"]) * u.deg)
+    collections = collections_for(settings)
+    cached = sia_cache_path(center, collections) if context.get("refresh") else None
+    aside = cached.with_suffix(".previous") if cached is not None else None
+    if cached is not None and cached.is_file():
+        cached.replace(aside)  # so spherex_frames() asks IRSA instead of reading it
     try:
-        return context["find"](center, collections_for(settings))
+        listing = context["find"](center, collections)
     except Exception as error:  # any failure of a remote service counts as a failed search
         failure = error
+    else:
+        if aside is not None:
+            aside.unlink(missing_ok=True)
+        return listing
+    if aside is not None and aside.is_file():
+        aside.replace(cached)
+        log.warning("target=%s: the IRSA search failed (%s); using its answer from the last run",
+                    name, failure)
+        return pd.read_parquet(cached)
     saved = frame_list_path(name, root)
     if saved.is_file():
         log.warning("target=%s: the IRSA search failed (%s); using the frame list saved in %s",

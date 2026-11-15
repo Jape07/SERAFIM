@@ -7,8 +7,9 @@
 - `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
 - `python -m serafim png [--target X]`: PNG of sums, differences and color in data/gold/ (D7).
 - `python -m serafim gold [--target X]`: real gold (tables, meta.json, PNGs), validated (D8).
-- `python -m serafim run [--target X] [--from silver]`: the whole pipeline for the targets in
-  settings.publish (task D9); what publish.yml runs.
+- `python -m serafim run [--target X] [--from silver] [--refresh-search]`: the whole pipeline
+  for the targets in settings.publish (task D9); what publish.yml runs. `--refresh-search` asks
+  IRSA's search again for new frames and seasons (the weekly run, task D10).
 
 Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
 """
@@ -25,6 +26,8 @@ from serafim.config import load_config
 log = logging.getLogger("serafim")
 
 TARGET_HELP = "Only this target (an id from config/targets.yaml)."
+REFRESH_HELP = ("Ask IRSA's search again instead of reusing its cached answer, to find new "
+                "frames and seasons (the weekly run of publish.yml).")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only write config/spherex_frames/<target>.parquet (the fallback when IRSA's search "
              "is down); commit them.",
     )
+    bronze_cmd.add_argument("--refresh-search", action="store_true", help=REFRESH_HELP)
 
     snapshot_cmd = commands.add_parser(
         "gaia-snapshot", help="Write config/gaia_snapshot/<target>.parquet, a fixed copy of "
@@ -97,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="bronze",
         help="Layer to rebuild from (bronze is never re-downloaded if already there).",
     )
+    run.add_argument("--refresh-search", action="store_true", help=REFRESH_HELP)
     return parser
 
 
@@ -112,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             from serafim.bronze.download import save_frame_lists
 
             return 0 if save_frame_lists(args.target) else 1
-        return bronze(args.target)
+        return bronze(args.target, refresh=args.refresh_search)
     if args.command == "gaia-snapshot":
         from serafim.bronze.gaia_snapshot import save_snapshots
 
@@ -126,16 +131,16 @@ def main(argv: list[str] | None = None) -> int:
                     spectra=not args.no_spectra)
     if args.command == "png":
         return png(args.target, Path(args.out))
-    return full_run(args.target, args.start)
+    return full_run(args.target, args.start, refresh=args.refresh_search)
 
 
-def full_run(target_id: str | None, start: str) -> int:
+def full_run(target_id: str | None, start: str, *, refresh: bool = False) -> int:
     """The whole pipeline; 1 if a step fails (gold is then left as it was)."""
     from serafim.bronze.download import ArchiveError
     from serafim.pipeline import run
 
     try:
-        counts = run(target_id, start=start)
+        counts = run(target_id, start=start, refresh_search=refresh)
     except (ArchiveError, FileNotFoundError, ValueError) as error:  # incl. GoldValidationError
         log.error("%s", error)
         return 1
@@ -143,12 +148,12 @@ def full_run(target_id: str | None, start: str) -> int:
     return 0
 
 
-def bronze(target_id: str | None) -> int:
-    """Download bronze cutouts. Silver and gold come in later tasks."""
+def bronze(target_id: str | None, *, refresh: bool = False) -> int:
+    """Download the bronze cutouts that are missing."""
     from serafim.bronze.download import ArchiveError, download
 
     try:
-        download(target_id)
+        download(target_id, refresh=refresh)
     except ArchiveError as error:
         log.error("%s", error)
         return 1
