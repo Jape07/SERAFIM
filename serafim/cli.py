@@ -2,6 +2,7 @@
 
 - `python -m serafim mock [--all-targets]`: simulated gold in data/gold/.
 - `python -m serafim bronze [--target X]`: IRSA cutouts in data/bronze/ (task D3).
+- `python -m serafim gaia-snapshot [--target X]`: fixed copy of Gaia DR3 in config/gaia_snapshot/.
 - `python -m serafim silver [--target X] [--force]`: frames, sums, differences (D4 to D6).
 - `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
 - `python -m serafim png [--target X]`: PNG of sums, differences and color in data/gold/ (D7).
@@ -47,6 +48,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only write config/spherex_frames/<target>.parquet (the fallback when IRSA's search "
              "is down); commit them.",
     )
+
+    snapshot_cmd = commands.add_parser(
+        "gaia-snapshot", help="Write config/gaia_snapshot/<target>.parquet, a fixed copy of "
+                              "Gaia DR3 around each target (used when ESA's archive is down); "
+                              "commit them.",
+    )
+    snapshot_cmd.add_argument("--target", help=TARGET_HELP)
 
     silver_cmd = commands.add_parser(
         "silver", help="Frames (D4), sums (D5) and differences (D6) in data/silver/."
@@ -105,6 +113,10 @@ def main(argv: list[str] | None = None) -> int:
 
             return 0 if save_frame_lists(args.target) else 1
         return bronze(args.target)
+    if args.command == "gaia-snapshot":
+        from serafim.bronze.gaia_snapshot import save_snapshots
+
+        return 0 if save_snapshots(args.target) else 1
     if args.command == "silver":
         return silver(args.target, force=args.force)
     if args.command == "alignment":

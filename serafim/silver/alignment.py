@@ -5,10 +5,10 @@
 A difference between seasons only shows real motion if the sums of both seasons sit on the same
 grid: an error of 0.2 px leaves a false dipole on every fixed star. So, for each sum of one
 detector and one season, the bright stars found in the sum are compared with where Gaia puts
-them on the mean date of the sum (Gaia G 10-15 from the cached query that catalog_layers()
-uses, moved with serafim.validation.layers.move()). The goal is a median offset under
-GOAL_PX in x and in y. Nothing is corrected automatically: a cell over the goal is reported
-and talked over with AI.
+them on the mean date of the sum (Gaia G 10-15 from the copy in config/gaia_snapshot/, or the
+query that catalog_layers() uses, moved with serafim.validation.layers.move()). The goal is a
+median offset under GOAL_PX in x and in y. Nothing is corrected automatically: a cell over the
+goal is reported and talked over with AI.
 """
 
 from __future__ import annotations
@@ -115,65 +115,35 @@ def measure_between_seasons(target_id: str, *, root: Path | None = None) -> pd.D
     return pd.DataFrame(rows, columns=["detector", "season", "n_stars", "dx_px", "dy_px"])
 
 
-# Mirrors of VizieR that serve Gaia DR3 (I/355/gaiadr3), tried in order. Used only when ESA's
-# Gaia archive does not answer; the main CDS site was offline in November 2026.
-VIZIER_SERVERS = ("vizier.cfa.harvard.edu", "vizier.cds.unistra.fr", "vizier.iucaa.in")
+def gaia_sources(target: dict, size_deg: float, *, root: Path | None = None) -> pd.DataFrame:
+    """Gaia DR3 around the target: the copy in config/gaia_snapshot/ if it covers the cutout,
+    else ESA's archive (or its cache), else a VizieR mirror."""
+    from serafim.bronze.gaia_snapshot import from_snapshot, from_vizier
+    from serafim.validation import catalogs, layers
 
-
-def gaia_from_vizier(center: SkyCoord, radius, max_mag: float) -> pd.DataFrame:
-    """Gaia DR3 sources from a VizieR mirror, in the columns of validation.catalogs.
-
-    Positions are ICRS at epoch 2016.0, as in ESA's archive, so layers.move() works the same.
-    """
-    from astroquery.vizier import Vizier
-
-    from serafim.validation import catalogs
-
-    columns = ["Source", "RA_ICRS", "DE_ICRS", "pmRA", "pmDE", "Plx", "Gmag"]
-    last = None
-    for server in VIZIER_SERVERS:
-        vizier = Vizier(columns=columns, row_limit=-1, column_filters={"Gmag": f"<{max_mag}"},
-                        vizier_server=server, timeout=60)
-        try:
-            found = vizier.query_region(center, radius=radius, catalog="I/355/gaiadr3")
-        except Exception as error:  # any failure: try the next mirror
-            last = error
-            continue
-        if not len(found) or not len(found[0]):  # an empty answer once came back: next mirror
-            last = f"{server} answered no rows"
-            continue
-        table = found[0].to_pandas()
-        rows = pd.DataFrame({
-            "catalog": "gaia", "name": "Gaia DR3 " + table["Source"].astype(str),
-            "ra": table["RA_ICRS"].astype(float), "dec": table["DE_ICRS"].astype(float),
-            "type": None, "is_variable": False, "mag": table["Gmag"].astype(float), "url": None,
-            "pmra_mas_yr": table["pmRA"].astype(float), "pmdec_mas_yr": table["pmDE"].astype(float),
-            "parallax_mas": table["Plx"].astype(float), "epoch_jyear": catalogs.GAIA_EPOCH_JYEAR,
-        })
-        log.info("Gaia DR3 from %s: %d sources", server, len(rows))
-        return rows[[c for c in catalogs.COLUMNS if c in rows.columns]]
-    raise catalogs.CatalogUnavailable(f"Gaia DR3 at VizieR did not answer: {last}")
+    center = SkyCoord(float(target["ra_now"]) * u.deg, float(target["dec_now"]) * u.deg)
+    radius = catalogs._region_radius(size_deg)
+    saved = from_snapshot(center, radius, layers.GAIA_MAX_MAG, root=root)
+    if saved is not None:
+        return saved
+    try:
+        return catalogs.gaia(center, radius, max_mag=layers.GAIA_MAX_MAG)
+    except catalogs.CatalogUnavailable as error:
+        log.warning("target=%s: %s; trying Gaia DR3 at VizieR", target["id"], error)
+        return from_vizier(center, radius, GAIA_MAG[1])[0]
 
 
 def measure_alignment(target_id: str, *, root: Path | None = None, sources=None) -> pd.DataFrame:
     """One row per sum of one detector and one season: n_stars, dx_px, dy_px.
 
-    `sources` is a catalogs.COLUMNS table (for tests); by default Gaia from the catalog cache.
+    `sources` is a catalogs.COLUMNS table (for tests); by default Gaia from gaia_sources().
     """
     root = root or ROOT
     config = load_config(root / "config" / "targets.yaml")
     target = next(t for t in config["targets"] if t["id"] == target_id)
     if sources is None:
-        from serafim.validation import catalogs, layers
-
-        center = SkyCoord(float(target["ra_now"]) * u.deg, float(target["dec_now"]) * u.deg)
         size = float(target.get("cutout_size_deg") or config["settings"]["cutout_size_deg"])
-        try:
-            sources = catalogs.gaia(center, catalogs._region_radius(size),
-                                    max_mag=layers.GAIA_MAX_MAG)
-        except catalogs.CatalogUnavailable as error:
-            log.warning("target=%s: %s; trying Gaia DR3 at VizieR", target_id, error)
-            sources = gaia_from_vizier(center, catalogs._region_radius(size), GAIA_MAG[1])
+        sources = gaia_sources(target, size, root=root)
     sources = sources[sources["mag"].between(*GAIA_MAG)].reset_index(drop=True)
 
     from serafim.validation.layers import move
