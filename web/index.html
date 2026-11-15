@@ -117,6 +117,14 @@
               <button type="button" data-detector="0" data-i18n="detectorAll">All</button>
               <button type="button" data-detector="color" data-i18n="detectorColor">Color</button>
             </div>
+            <div class="choice" id="layers" role="group" data-i18n="layerLabel" data-i18n-attr="aria-label" aria-label="Layers">
+              <button type="button" data-layer="gaia" data-i18n="layerGaia">Gaia</button>
+              <button type="button" data-layer="catwise" data-i18n="layerCatwise">CatWISE</button>
+              <button type="button" data-layer="simbad" data-i18n="layerSimbad">SIMBAD</button>
+              <button type="button" data-layer="skybot" data-i18n="layerSkybot">Asteroids</button>
+            </div>
+            <label class="label" for="mag-reach" data-i18n="magLabel">Fainter catalog stars</label>
+            <input class="slider" id="mag-reach" type="range" min="0" max="100" value="0" aria-valuemin="0" aria-valuemax="100">
             <div class="choice" id="modes" role="group" data-i18n="modeLabel" data-i18n-attr="aria-label" aria-label="Mode">
               <button type="button" data-mode="sum" data-i18n="modeSum">One season</button>
               <button type="button" data-mode="difference" data-i18n="modeDifference">Difference</button>
@@ -128,6 +136,10 @@
             <p class="hint" id="caption"></p>
             <p class="note" id="saturated-badge" hidden></p>
             <div id="flag-notes"></div>
+            <figure id="spectrum" hidden>
+              <figcaption class="label" data-i18n="spectrumLabel">Spectrum</figcaption>
+              <svg id="spectrum-plot" viewBox="0 0 280 110" role="img"></svg>
+            </figure>
             <div class="deltas">
               <div class="mini"><span data-i18n="motion">Motion</span><strong id="move-read">—</strong></div>
               <div class="mini"><span data-i18n="wavelength">Wavelength</span><strong id="wave-read">—</strong></div>
@@ -323,6 +335,6 @@
       document.dispatchEvent(new Event("serafim-lang"));
     });
   </script>
-  <script type="module" src="js/app.js?v=w4"></script>
+  <script type="module" src="js/app.js?v=w5c"></script>
 </body>
 </html>

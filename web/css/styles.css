@@ -425,7 +425,16 @@ html[data-theme="light"] .mini { background: white; }
 
 .gif-controls { padding: 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
-#modes.choice { grid-template-columns: repeat(2, 1fr); margin-top: 0.7rem; }
+#modes.choice, #layers.choice { grid-template-columns: repeat(2, 1fr); margin-top: 0.7rem; }
+.sky svg .marker { pointer-events: auto; cursor: pointer; }
+.sky svg .marker circle, .sky svg .marker rect, .sky svg .marker polygon {
+  fill: none;
+  stroke: #f4f6f8;
+  stroke-width: 1.4;
+}
+.sky svg .marker.selected circle,
+.sky svg .marker.selected rect,
+.sky svg .marker.selected polygon { stroke: #fc3d21; stroke-width: 2.2; }
 #flag-notes p { margin: 0.15rem 0 0; }
 .choice button {
   border: 1px solid var(--line-strong);

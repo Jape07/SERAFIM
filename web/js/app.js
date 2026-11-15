@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=w4";
+import { apply, lang, onChange, t } from "./i18n.js?v=w5c";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -46,6 +46,7 @@ function langCode() {
 }
 
 const MODES = ["sum", "difference", "all_seasons", "blink"];
+const LAYERS = ["gaia", "catwise", "simbad", "skybot"];
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
 const discardedBox = document.querySelector("#discarded");
@@ -81,6 +82,12 @@ let mode = "sum";
 let sumRows = [];
 let diffRows = [];
 let guide = null;
+let layersOn = new Set(LAYERS);
+let selectedSource = null;
+let magReach = 0;
+const catalogCache = new Map();
+const spectrumCache = new Map();
+const projectionSeen = new Set();
 const goldTargets = new Map();
 const cache = new Map();
 const BANDS = {
@@ -135,8 +142,27 @@ function skyFor(row) {
   return pngUrl(row);
 }
 
+function howToLook(targetId) {
+  return guide?.targets?.find((item) => item.id === targetId)?.how_to_look || null;
+}
+
 function openingDetector(targetId) {
-  return targetId === "wise_0855" ? 6 : 1;
+  const first = howToLook(targetId)?.detectors?.[0];
+  return Number.isInteger(first) ? first : 1;
+}
+
+function openingMode(targetId) {
+  const name = howToLook(targetId)?.mode;
+  return MODES.includes(name) ? name : "sum";
+}
+
+function openingSeason(targetId) {
+  const how = howToLook(targetId);
+  const seasons = how?.seasons || [];
+  if (how?.mode === "difference" && seasons.length >= 2) return `${seasons[0]}-${seasons[seasons.length - 1]}`;
+  if (how?.mode === "all_seasons") return "0";
+  const first = seasons.find((season) => season >= 1);
+  return first == null ? "" : String(first);
 }
 
 function parseDetector(value, targetId) {
@@ -722,6 +748,263 @@ function fillCompare() {
   document.querySelector("#cmp-count").textContent = t(findings === 1 ? "finding" : "findings", { n: findings });
 }
 
+function parseLayers(value) {
+  if (value == null) return new Set(LAYERS);
+  return new Set(value.split(",").map((item) => item.trim()).filter((item) => LAYERS.includes(item)));
+}
+
+function catalogSeason(frame) {
+  if (!frame) return null;
+  if (mode === "all_seasons") return 0;
+  if (mode === "difference") return frame.season_b;
+  return frame.season;
+}
+
+function catalogFor(target, season) {
+  const key = `${target}:${season}`;
+  if (!catalogCache.has(key)) {
+    const pending = catalogs(target, season).catch((error) => {
+      catalogCache.delete(key);
+      throw error;
+    });
+    catalogCache.set(key, pending);
+  }
+  return catalogCache.get(key);
+}
+
+function skyToPixel(wcs, ra, dec) {
+  const ra0 = (Number(wcs.CRVAL1) * Math.PI) / 180;
+  const dec0 = (Number(wcs.CRVAL2) * Math.PI) / 180;
+  const raR = (Number(ra) * Math.PI) / 180;
+  const decR = (Number(dec) * Math.PI) / 180;
+  const cosc = Math.sin(dec0) * Math.sin(decR) + Math.cos(dec0) * Math.cos(decR) * Math.cos(raR - ra0);
+  if (!(cosc > 0)) return null;
+  const xi = (Math.cos(decR) * Math.sin(raR - ra0) / cosc) * (180 / Math.PI);
+  const eta = ((Math.cos(dec0) * Math.sin(decR) - Math.sin(dec0) * Math.cos(decR) * Math.cos(raR - ra0)) / cosc) * (180 / Math.PI);
+  let fitsX;
+  let fitsY;
+  if (wcs.CD1_1 != null && wcs.CD2_2 != null) {
+    const a = Number(wcs.CD1_1);
+    const b = Number(wcs.CD1_2 || 0);
+    const c = Number(wcs.CD2_1 || 0);
+    const d = Number(wcs.CD2_2);
+    const det = a * d - b * c;
+    if (!det) return null;
+    fitsX = Number(wcs.CRPIX1) + (d * xi - b * eta) / det;
+    fitsY = Number(wcs.CRPIX2) + (-c * xi + a * eta) / det;
+  } else {
+    fitsX = Number(wcs.CRPIX1) + xi / Number(wcs.CDELT1);
+    fitsY = Number(wcs.CRPIX2) + eta / Number(wcs.CDELT2);
+  }
+  return { x: fitsX - 1, y: Number(wcs.NAXIS2) - fitsY };
+}
+
+function layerName(id) {
+  const key = { gaia: "layerGaia", catwise: "layerCatwise", simbad: "layerSimbad", skybot: "layerSkybot" }[id];
+  return key ? t(key) : id;
+}
+
+function markerShape(catalog, x, y) {
+  const node = document.createElementNS(SVG, "g");
+  node.classList.add("marker", `marker-${catalog}`);
+  node.dataset.catalog = catalog;
+  node.setAttribute("transform", `translate(${x} ${y})`);
+  let shape;
+  if (catalog === "gaia") {
+    shape = document.createElementNS(SVG, "circle");
+    shape.setAttribute("r", "3.2");
+  } else if (catalog === "catwise") {
+    shape = document.createElementNS(SVG, "rect");
+    shape.setAttribute("x", "-3");
+    shape.setAttribute("y", "-3");
+    shape.setAttribute("width", "6");
+    shape.setAttribute("height", "6");
+  } else if (catalog === "simbad") {
+    shape = document.createElementNS(SVG, "polygon");
+    shape.setAttribute("points", "0,-4.2 4.2,0 0,4.2 -4.2,0");
+  } else {
+    shape = document.createElementNS(SVG, "polygon");
+    shape.setAttribute("points", "0,-4 3.6,3.2 -3.6,3.2");
+  }
+  node.append(shape);
+  return node;
+}
+
+function markLayers() {
+  const group = document.querySelector("#layers");
+  if (!group) return;
+  for (const button of group.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", layersOn.has(button.dataset.layer) ? "true" : "false");
+  }
+}
+
+function showSource(row) {
+  const readout = document.querySelector("#cnn-out");
+  const notes = document.querySelector("#panel-notes");
+  const name = document.querySelector("#panel-name");
+  if (!row) {
+    notes.hidden = true;
+    name.hidden = true;
+    return;
+  }
+  const mag = row.mag == null || row.mag === "" ? "—" : `${Number(row.mag).toFixed(1)} ${row.mag_band || ""}`.trim();
+  readout.textContent = t("catalogHit", { name: row.name, catalog: layerName(row.catalog), mag });
+  name.hidden = false;
+  name.textContent = row.name;
+  notes.hidden = false;
+  notes.replaceChildren();
+  if (row.url) {
+    const link = document.createElement("a");
+    link.href = row.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = t("catalogLink");
+    notes.append(link);
+  } else {
+    notes.textContent = t("catalogNoLink");
+  }
+}
+
+function markerRules() {
+  return guide?.targets?.find((item) => item.id === activeTarget)?.markers || null;
+}
+
+function magLimit(layer) {
+  const rules = markerRules();
+  const base = rules?.default_max_mag?.[layer];
+  if (base == null) return null;
+  const table = rules?.visible_max_mag?.[layer];
+  let faint = Number(base);
+  if (table) {
+    const values = detector === 0 || detector === "color"
+      ? Object.values(table).map(Number)
+      : [Number(table[String(detector)] ?? base)];
+    faint = Math.max(...values.filter(Number.isFinite), faint);
+  }
+  if (!(faint > base)) return Number(base);
+  return Number(base) + (magReach / 100) * (faint - Number(base));
+}
+
+function rasterOf(picture) {
+  if (picture._raster) return picture._raster;
+  const canvas = document.createElement("canvas");
+  canvas.width = picture.naturalWidth;
+  canvas.height = picture.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(picture, 0, 0);
+  picture._raster = context.getImageData(0, 0, canvas.width, canvas.height);
+  return picture._raster;
+}
+
+function neutralPixel(raster, x, y) {
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  if (ix < 0 || iy < 0 || ix >= raster.width || iy >= raster.height) return true;
+  const index = (iy * raster.width + ix) * 4;
+  const red = raster.data[index];
+  const green = raster.data[index + 1];
+  const blue = raster.data[index + 2];
+  return Math.abs(red - 128) < 3 && Math.abs(green - 128) < 3 && Math.abs(blue - 128) < 3;
+}
+
+function checkProjection(wcs) {
+  if (projectionSeen.has(activeTarget)) return;
+  projectionSeen.add(activeTarget);
+  const checks = markerRules()?.projection_check || [];
+  for (const item of checks) {
+    const pixel = skyToPixel(wcs, item.ra, item.dec);
+    const dx = pixel ? Math.abs(pixel.x - item.png_x) : Infinity;
+    const dy = pixel ? Math.abs(pixel.y - item.png_y) : Infinity;
+    if (dx > 0.05 || dy > 0.05) console.warn("projection check", activeTarget, item, pixel);
+  }
+}
+
+function spectrumFor(target) {
+  if (!spectrumCache.has(target)) {
+    const pending = spectra(target).catch((error) => {
+      spectrumCache.delete(target);
+      throw error;
+    });
+    spectrumCache.set(target, pending);
+  }
+  return spectrumCache.get(target);
+}
+
+function drawSpectrum(rows) {
+  const host = document.querySelector("#spectrum");
+  const plot = document.querySelector("#spectrum-plot");
+  if (!host || !plot) return;
+  plot.replaceChildren();
+  if (!rows?.length) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const width = 280;
+  const height = 110;
+  const pad = 16;
+  const xs = rows.map((row) => Number(row.wavelength_um));
+  const ys = rows.map((row) => Number(row.flux_mjy));
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const seasons = [...new Set(rows.map((row) => row.season))].sort((a, b) => a - b);
+  const colors = ["#0B3D91", "#9BB6E6", "#FC3D21", "#6B7280", "#111827"];
+  const xOf = (value) => pad + ((value - minX) / (maxX - minX || 1)) * (width - pad * 2);
+  const yOf = (value) => height - pad - ((value - minY) / (maxY - minY || 1)) * (height - pad * 2);
+  for (const season of seasons) {
+    const color = colors[seasons.indexOf(season) % colors.length];
+    for (const row of rows.filter((item) => item.season === season)) {
+      const hollow = row.flag === "saturated" || row.flag === "poor_fit";
+      const dot = document.createElementNS(SVG, "circle");
+      dot.setAttribute("cx", String(xOf(row.wavelength_um)));
+      dot.setAttribute("cy", String(yOf(row.flux_mjy)));
+      dot.setAttribute("r", "2.4");
+      dot.setAttribute("fill", hollow ? "none" : color);
+      dot.setAttribute("stroke", color);
+      dot.setAttribute("stroke-width", "1.2");
+      plot.append(dot);
+    }
+  }
+}
+
+function drawCatalog(rows, picture) {
+  marks.replaceChildren();
+  const width = picture?.naturalWidth;
+  const height = picture?.naturalHeight;
+  const placed = goldTargets.get(activeTarget);
+  if (!width || !height || !placed?.wcs_json) return;
+  let wcs = placed.wcs_json;
+  if (typeof wcs === "string") wcs = JSON.parse(wcs);
+  checkProjection(wcs);
+  const raster = rasterOf(picture);
+  marks.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  marks.setAttribute("preserveAspectRatio", "xMidYMid slice");
+  const visible = rows.filter((row) => {
+    if (!layersOn.has(row.catalog)) return false;
+    const limit = magLimit(row.catalog);
+    return limit == null || row.mag == null || row.mag === "" || Number(row.mag) <= limit;
+  });
+  for (const row of visible) {
+    const pixel = skyToPixel(wcs, row.ra, row.dec);
+    if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) continue;
+    if (neutralPixel(raster, pixel.x, pixel.y)) continue;
+    const node = markerShape(row.catalog, pixel.x, pixel.y);
+    node.dataset.name = row.name;
+    if (selectedSource && selectedSource.catalog === row.catalog && selectedSource.name === row.name) {
+      node.classList.add("selected");
+    }
+    node.addEventListener("click", () => {
+      selectedSource = row;
+      showSource(row);
+      for (const marker of marks.querySelectorAll(".marker")) marker.classList.remove("selected");
+      node.classList.add("selected");
+    });
+    marks.append(node);
+  }
+}
+
 async function render() {
   const frame = sequence[index];
   if (!frame) return;
@@ -738,13 +1021,9 @@ async function render() {
   const shown = shownDetector(frame);
   const name = placed?.name || target.name;
   image.alt = altFor(frame, name);
-  marks.replaceChildren();
   caption.textContent = captionFor(frame);
   showNotes(frame);
   const readout = document.querySelector("#cnn-out");
-  if (activeTarget === "wise_0855" && shown >= 1 && shown <= 4) readout.textContent = t("wiseNeighbor");
-  else if (activeTarget === "wise_0855") readout.textContent = t("wiseGuide");
-  else if (!selectedId) readout.textContent = t("cnnIdle");
   slider.value = String(index);
   slider.max = String(Math.max(sequence.length - 1, 0));
   document.querySelector("#sector").textContent = name;
@@ -756,6 +1035,7 @@ async function render() {
   url.searchParams.set("detector", String(detector));
   url.searchParams.set("season", seasonToken(frame));
   url.searchParams.set("mode", mode);
+  url.searchParams.set("layers", LAYERS.filter((id) => layersOn.has(id)).join(","));
   url.searchParams.delete("region");
   url.searchParams.delete("frame");
   history.replaceState(null, "", url);
@@ -763,6 +1043,36 @@ async function render() {
   fillCompare();
   markDetectors();
   markModes();
+  markLayers();
+  const season = catalogSeason(frame);
+  try {
+    const sources = season == null ? [] : await catalogFor(activeTarget, season);
+    if (token !== viewToken) return;
+    if (selectedSource && !sources.some((row) => row.catalog === selectedSource.catalog && row.name === selectedSource.name)) {
+      selectedSource = null;
+    } else if (selectedSource) {
+      selectedSource = sources.find((row) => row.catalog === selectedSource.catalog && row.name === selectedSource.name) || null;
+    }
+    drawCatalog(sources, picture);
+    if (selectedSource) showSource(selectedSource);
+    else {
+      showSource(null);
+      if (activeTarget === "wise_0855" && shown >= 1 && shown <= 4) readout.textContent = t("wiseNeighbor");
+      else if (activeTarget === "wise_0855") readout.textContent = t("wiseGuide");
+      else readout.textContent = t("cnnIdle");
+    }
+  } catch (error) {
+    console.error(error);
+    marks.replaceChildren();
+  }
+  try {
+    const points = await spectrumFor(activeTarget);
+    if (token !== viewToken) return;
+    drawSpectrum(points);
+  } catch (error) {
+    console.error(error);
+    drawSpectrum([]);
+  }
   armBlink(pair, pictures);
   loadImage(pngUrl(sequence[index - 1]));
   loadImage(pngUrl(sequence[index + 1]));
@@ -910,7 +1220,13 @@ function renderRegions() {
     button.textContent = active ? t("viewing") : t("loadTarget");
     button.addEventListener("click", () => {
       activeTarget = target.id;
-      openRegion(target.id, { scroll: true, detector: openingDetector(target.id) });
+      const season = openingSeason(target.id);
+      openRegion(target.id, {
+        scroll: true,
+        detector: openingDetector(target.id),
+        mode: openingMode(target.id),
+        season,
+      });
     });
     card.append(head, text, button);
     host.append(card);
@@ -944,6 +1260,8 @@ async function openRegion(targetId, options = {}) {
   hits = [];
   byObject = new Map();
   selectedId = "";
+  selectedSource = null;
+  marks.replaceChildren();
   detector = options.detector ?? detector;
   if (options.mode) mode = parseMode(options.mode);
   blinkPaused = false;
@@ -962,6 +1280,20 @@ playButton.addEventListener("click", () => togglePlay());
 slider.addEventListener("input", () => {
   setPlaying(false);
   index = Number(slider.value);
+  render();
+});
+document.querySelector("#mag-reach").addEventListener("input", (event) => {
+  magReach = Number(event.target.value);
+  render();
+});
+document.querySelector("#layers").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const id = button.dataset.layer;
+  if (!LAYERS.includes(id)) return;
+  if (layersOn.has(id)) layersOn.delete(id);
+  else layersOn.add(id);
+  markLayers();
   render();
 });
 document.querySelector("#modes").addEventListener("click", (event) => {
@@ -1093,8 +1425,12 @@ try {
   const wanted = params.get("target") || params.get("region") || "barnard";
   const match = found.find((row) => row.target_id === wanted) || found[0];
   if (match) activeTarget = match.target_id;
-  detector = parseDetector(params.get("detector"), activeTarget);
-  mode = parseMode(params.get("mode"));
+  detector = params.has("detector")
+    ? parseDetector(params.get("detector"), activeTarget)
+    : openingDetector(activeTarget);
+  mode = params.has("mode") ? parseMode(params.get("mode")) : openingMode(activeTarget);
+  layersOn = parseLayers(params.has("layers") ? params.get("layers") : null);
+  if (!params.has("season")) params.set("season", openingSeason(activeTarget));
   document.querySelector("#updated").textContent = info?.run_date_utc
     ? t("tablesLoaded", { date: info.run_date_utc })
     : t("tablesLoaded", { date: "—" });
