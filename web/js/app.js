@@ -38,6 +38,15 @@ const SKY = {
 };
 const CARD = { pole: "ngc-stars.jpg", asteroid: "cygnus.jpg", variable_star: "ice.jpg" };
 const FRAME_PX = 293;
+const TARGETS = [
+  { id: "barnard", name: "Barnard's Star", icon: "✨", ra: 269.452077, dec: 4.693365, blurb: "Estrella cercana de gran movimiento propio visible a través de épocas. Ideal para medir desplazamientos temporales rápidos." },
+  { id: "eps_indi_b", name: "Epsilon Indi B", icon: "🪐", ra: 331.0441466, dec: -56.7828442, blurb: "Sistema binario de enanas marrones frías. Excelente objetivo para comparar firmas espectrales y cinemática local." },
+  { id: "wise_0855", name: "WISE 0855", icon: "❄️", ra: 133.8189082, dec: -7.247048, blurb: "Objeto frío subestelar y enana marrón de tipo Y. Detectable casi exclusivamente en observaciones infrarrojas profundas." },
+  { id: "rw_aur", name: "RW Aurigae", icon: "☄️", ra: 76.956526, dec: 30.4014382, blurb: "Sistema estelar binario joven con disco circunestelar perturbado, mostrando oscurecimientos periódicos y eventos dinámicos." },
+  { id: "r_dra", name: "R Draconis", icon: "⭐", ra: 248.1676108, dec: 66.7549794, blurb: "Estrella variable pulsante de largo período tipo Mira con marcadas oscilaciones de magnitud óptica e infrarroja." },
+];
+let activeTarget = "barnard";
+const format = new Intl.NumberFormat("es");
 
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
@@ -125,6 +134,69 @@ function regionName(id) {
 
 function titleOf(id) {
   return TITLE[id] || regionName(id);
+}
+
+function targetOf() {
+  return TARGETS.find((item) => item.id === activeTarget) || TARGETS[0];
+}
+
+function goldFor(targetId) {
+  const direct = regionList.find((region) => region.region_id === targetId);
+  if (direct) return direct;
+  const at = Math.max(0, TARGETS.findIndex((item) => item.id === targetId));
+  return regionList[at % Math.max(regionList.length, 1)];
+}
+
+function hms(degrees) {
+  const hours = degrees / 15;
+  const whole = Math.floor(hours);
+  const minutes = Math.floor((hours - whole) * 60);
+  const seconds = ((hours - whole) * 60 - minutes) * 60;
+  return `${whole}h ${String(minutes).padStart(2, "0")}m ${seconds.toFixed(1)}s`;
+}
+
+function dms(degrees) {
+  const sign = degrees < 0 ? "-" : "+";
+  const absolute = Math.abs(degrees);
+  const whole = Math.floor(absolute);
+  const minutes = Math.floor((absolute - whole) * 60);
+  const seconds = ((absolute - whole) * 60 - minutes) * 60;
+  return `${sign}${whole}° ${String(minutes).padStart(2, "0")}' ${seconds.toFixed(1)}"`;
+}
+
+function tally(frame) {
+  if (!frame) return { known: 0, candidate: 0, discarded: 0 };
+  const ids = new Set(hits.filter((hit) => hit.frame_id === frame.frame_id).map((hit) => hit.object_id));
+  const rows = [...ids].map((id) => byObject.get(id)).filter(Boolean);
+  return {
+    known: rows.filter((row) => row.status === "Known").length,
+    candidate: rows.filter((row) => row.status === "Unidentified candidate").length,
+    discarded: rows.filter((row) => row.status === "Discarded").length,
+  };
+}
+
+function fillEpochs() {
+  const frame = sequence[index];
+  const baseline = sequence[0];
+  if (!frame || !baseline) return;
+  const now = tally(frame);
+  const base = tally(baseline);
+  document.querySelector("#stat-known").textContent = format.format(now.known);
+  document.querySelector("#stat-candidate").textContent = format.format(now.candidate);
+  document.querySelector("#stat-discarded").textContent = format.format(now.discarded);
+  document.querySelector("#stat-frames").textContent = format.format(sequence.length);
+  document.querySelector("#base-known").textContent = format.format(base.known);
+  document.querySelector("#base-candidate").textContent = format.format(base.candidate);
+  document.querySelector("#base-discarded").textContent = format.format(base.discarded);
+  document.querySelector("#base-frames").textContent = "1";
+  document.querySelector("#epoch-now").textContent = fecha(frame.date_utc);
+  document.querySelector("#epoch-then").textContent = fecha(baseline.date_utc);
+  const delta = now.candidate - base.candidate;
+  document.querySelector("#delta-candidates").textContent =
+    `${delta >= 0 ? "+" : ""}${delta} candidatos entre las dos fechas`;
+  document.querySelector("#delta-span").textContent = `Intervalo temporal: ${intervalo(baseline, frame)}`;
+  document.querySelector("#updated").textContent =
+    `Diferencia: ${intervalo(baseline, frame)} · ${targetOf().name}`;
 }
 
 function statusOf(object) {
@@ -230,7 +302,9 @@ function fillPanel() {
   const prob = document.querySelector("#panel-prob");
   document.querySelector("#panel-date").textContent = frame ? fecha(frame.date_utc) : "—";
   document.querySelector("#panel-region").textContent = regionName(frame?.region_id);
-  document.querySelector("#panel-wave").textContent = frame ? `${frame.wavelength_um} µm` : "—";
+  const wave = frame ? `${frame.wavelength_um} µm` : "—";
+  document.querySelector("#panel-wave").textContent = wave;
+  document.querySelector("#wave-read").textContent = wave;
   document.querySelector("#panel-now").textContent = frame ? fecha(frame.date_utc) : "—";
   document.querySelector("#panel-then").textContent = baseline ? fecha(baseline.date_utc) : "—";
   document.querySelector("#panel-span").textContent =
@@ -242,7 +316,9 @@ function fillPanel() {
     prob.hidden = true;
     document.querySelector("#panel-notes").replaceChildren("Los detalles aparecen al elegir un marcador del visor.");
     document.querySelector("#panel-move").textContent = "—";
+    document.querySelector("#move-read").textContent = "—";
     document.querySelector("#panel-place").textContent = "—";
+    document.querySelector("#place-read").textContent = "—";
     return;
   }
   const info = statusOf(object);
@@ -268,9 +344,14 @@ function fillPanel() {
     notes.append(span);
   }
   const shift = frame && baseline ? movement(object, baseline, frame) : null;
-  document.querySelector("#panel-move").textContent = shift == null ? "—" : `${shift.toFixed(1)}″`;
+  const moveText = shift == null ? "—" : `${shift.toFixed(1)}″`;
+  document.querySelector("#panel-move").textContent = moveText;
+  document.querySelector("#move-read").textContent = moveText;
+  document.querySelector("#delta-move").textContent = shift == null ? "Sin desplazamiento medido" : `${shift.toFixed(1)}″ de desplazamiento`;
   const hit = frame ? detectionOn(object.object_id, frame.frame_id) : null;
-  document.querySelector("#panel-place").textContent = hit ? place(hit) : "Fuera de esta foto";
+  const where = hit ? place(hit) : "Fuera de esta foto";
+  document.querySelector("#panel-place").textContent = where;
+  document.querySelector("#place-read").textContent = where;
 }
 
 function fillCompare() {
@@ -326,7 +407,11 @@ async function render() {
   draw(frame);
   caption.textContent = `${stamp(frame.date_utc)} · ${frame.wavelength_um} µm · ${index + 1} / ${sequence.length}`;
   slider.value = String(index);
-  document.querySelector("#sector").textContent = titleOf(frame.region_id);
+  const target = targetOf();
+  document.querySelector("#sector").textContent = target.name;
+  document.querySelector("#sky-ra").textContent = hms(target.ra);
+  document.querySelector("#sky-dec").textContent = dms(target.dec);
+  fillEpochs();
   const url = new URL(location.href);
   url.searchParams.set("region", frame.region_id);
   url.searchParams.set("frame", frame.frame_id);
@@ -369,6 +454,8 @@ function restartPreview() {
   gifStep = 0;
   gifBlob = null;
   document.querySelector("#gif-save").disabled = true;
+  const available = document.querySelector("#gif-available");
+  if (available) available.textContent = `${sequence.length} capturas`;
   updateGifLabel();
   const preview = document.querySelector("#gif-preview");
   const show = () => {
@@ -427,43 +514,36 @@ function saveGif() {
 function renderRegions() {
   const host = document.querySelector("#region-cards");
   host.replaceChildren();
-  const active = sequence[0]?.region_id;
-  for (const region of regionList) {
+  for (const target of TARGETS) {
+    const active = target.id === activeTarget;
     const card = document.createElement("article");
-    card.className = region.region_id === active ? "card active" : "card";
-    const photo = document.createElement("img");
-    photo.className = "card-photo";
-    photo.alt = "";
-    photo.src = assetUrl(CARD[region.region_id] || "cygnus.jpg");
-    card.append(photo);
-    if (region.region_id === active) {
+    card.className = active ? "card active" : "card";
+    if (active) {
       const flag = document.createElement("span");
       flag.className = "flag";
       flag.textContent = "Región activa";
       card.append(flag);
     }
-    const icon = document.createElement("div");
-    icon.className = "icon";
-    icon.textContent = ICON[region.region_id] || "✦";
-    const title = document.createElement("h3");
-    title.textContent = titleOf(region.region_id);
-    const badge = document.createElement("span");
-    badge.className = region.region_id === active ? "tag amber" : "tag";
-    badge.textContent = region.region_id === active ? "En foco" : "Disponible";
     const head = document.createElement("div");
-    head.className = "row-between";
+    head.className = "card-title";
+    const title = document.createElement("h3");
+    title.textContent = `${target.icon} ${target.name}`;
+    const badge = document.createElement("span");
+    badge.className = active ? "tag amber" : "tag";
+    badge.textContent = active ? "En foco" : "Disponible";
     head.append(title, badge);
     const text = document.createElement("p");
-    text.textContent = `${BLURB[region.region_id] || region.name} RA ${Number(region.ra).toFixed(2)}°, Dec ${Number(region.dec).toFixed(2)}°.`;
+    text.textContent = target.blurb;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = region.region_id === active ? "amber wide" : "ghost wide";
-    button.textContent = region.region_id === active ? "Región en visualización" : "Cargar esta región";
-    button.addEventListener("click", () => openRegion(region.region_id, { scroll: true }));
-    const body = document.createElement("div");
-    body.className = "card-body";
-    body.append(icon, head, text, button);
-    card.append(body);
+    button.className = active ? "amber wide" : "soft wide";
+    button.textContent = active ? "Región en visualización" : "Cargar esta región";
+    button.addEventListener("click", () => {
+      activeTarget = target.id;
+      const region = goldFor(target.id);
+      if (region) openRegion(region.region_id, { scroll: true });
+    });
+    card.append(head, text, button);
     host.append(card);
   }
 }
@@ -610,6 +690,17 @@ document.querySelector("#gif-speed").addEventListener("click", (event) => {
 });
 document.querySelector("#gif-make").addEventListener("click", () => makeGif());
 document.querySelector("#gif-save").addEventListener("click", () => saveGif());
+document.querySelector("#analyze").addEventListener("click", () => {
+  const object = byObject.get(selectedId);
+  const out = document.querySelector("#cnn-out");
+  if (!object) {
+    out.textContent = "Elige un marcador del visor para analizarlo.";
+    return;
+  }
+  const score = Number(object.p_real);
+  const scored = Number.isFinite(score) ? ` p_real ${(score * 100).toFixed(1)}%.` : " Sin puntuación CNN todavía.";
+  out.textContent = `${object.name}: ${statusOf(object).label}.${scored} ${reasonOf(object)}`;
+});
 document.querySelector("#help-open").addEventListener("click", () => document.querySelector("#help").showModal());
 document.querySelector("#help-close").addEventListener("click", () => document.querySelector("#help").close());
 window.addEventListener("keydown", (event) => {
@@ -637,19 +728,12 @@ try {
   ]);
   regionList = found;
   catalog = groups.flat();
-  const counts = { Known: 0, "Unidentified candidate": 0, Discarded: 0 };
-  for (const row of catalog) counts[row.status] = (counts[row.status] || 0) + 1;
-  const format = new Intl.NumberFormat("es");
-  document.querySelector("#stat-known").textContent = format.format(counts.Known || 0);
-  document.querySelector("#stat-candidate").textContent = format.format(counts["Unidentified candidate"] || 0);
-  document.querySelector("#stat-discarded").textContent = format.format(counts.Discarded || 0);
-  document.querySelector("#stat-frames").textContent = format.format(info.n_frames || 0);
-  document.querySelector("#updated").textContent = info.run_date_utc
-    ? `Actualizado ${fecha(info.run_date_utc)}`
-    : "Sin fecha de publicación";
   renderCatalog();
-  const wanted = params.get("region") || "asteroid";
-  const region = found.find((item) => item.region_id === wanted) || found[0];
+  const wanted = params.get("region") || "barnard";
+  if (TARGETS.some((item) => item.id === wanted)) activeTarget = wanted;
+  const region = TARGETS.some((item) => item.id === wanted)
+    ? goldFor(wanted)
+    : found.find((item) => item.region_id === wanted) || found[0];
   await openRegion(region.region_id, { frame: params.get("frame") || "" });
   if (location.hash) {
     const target = document.querySelector(location.hash);
