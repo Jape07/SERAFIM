@@ -301,6 +301,18 @@ def test_a_wavelength_at_the_edge_of_the_detector_is_accepted(gold):
     contract.validate_gold(gold)
 
 
+def test_a_spectrum_point_at_the_edge_of_the_range_is_accepted(gold):
+    """A spectrum point takes the wavelength of its frame, so it gets the same margin.
+
+    Real gold (D8) had RW Aurigae at 5.0116 um in detector 6 and 0.7409 um in detector 1.
+    """
+    for value in (0.7409, 5.0116):
+        set_value(gold, "spectra.parquet", "wavelength_um", 0, value)
+        contract.validate_gold(gold)
+    set_value(gold, "spectra.parquet", "wavelength_um", 0, 0.72)  # beyond the 0.02 um margin
+    assert any("wavelength_um outside" in problem for problem in problems(gold))
+
+
 def test_rejects_repeated_keys(gold):
     first = read(gold, "frames.parquet").frame_id[0]
     set_value(gold, "frames.parquet", "frame_id", 1, first)
