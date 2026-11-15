@@ -365,8 +365,8 @@ def test_fetch_cutout_rejects_a_file_without_the_spherex_extensions(tmp_path, mo
     assert not job["destination"].exists()
 
 
-def test_full_pipeline_command_is_still_to_do():
-    assert main(["run", "--target", "barnard"]) == 1
+def test_the_pipeline_refuses_a_target_that_is_not_published():
+    assert main(["run", "--target", "wise_0855"]) == 1  # before any download
 
 
 def test_the_bronze_command_is_in_the_cli():

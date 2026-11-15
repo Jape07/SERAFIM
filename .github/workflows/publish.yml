@@ -1,38 +1,92 @@
 name: publish
 
+# Builds real gold with `python -m serafim run` (bronze, silver, gold for settings.publish),
+# checks it with validate_gold() and deploys the site with it. If any step fails, nothing is
+# deployed and the site keeps the previous version.
+#
+# Bronze (~4.4 MB per frame) and the catalog cache are kept in the Actions cache, so a run only
+# downloads frames it does not have yet. The first run of a target downloads all its frames
+# (Barnard: ~9 minutes with IRSA's 503s; the 5 targets: ~1 hour).
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the site (false: only build and check gold, e.g. from a branch)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# A new run waits for the one in progress instead of cancelling it: cancelling a long first
+# download would throw away its work.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install
         run: pip install -e .
-      - name: Simulated gold
-        run: python -m serafim mock --all-targets
+
+      - name: Restore bronze and the catalog cache
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/bronze
+            data/catalog_cache
+          key: bronze-never-an-exact-match
+          restore-keys: bronze-
+
+      - name: Pipeline (bronze, silver, gold)
+        run: python -m serafim run
+
+      # Saved even if the pipeline failed or the run was cancelled, so a long download is never
+      # lost; skipped when nothing new was downloaded or cached.
+      - name: Key of what is on disk now
+        id: key
+        if: always()
+        run: |
+          files=$(find data/bronze data/catalog_cache -type f 2>/dev/null | sort | sha256sum | cut -c1-16)
+          manifest=$(sha256sum data/bronze/manifest.parquet 2>/dev/null | cut -c1-16)
+          echo "key=bronze-${manifest:-none}-${files}" >> "$GITHUB_OUTPUT"
+      - name: Save bronze and the catalog cache
+        if: always() && steps.key.outputs.key != steps.restore.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/bronze
+            data/catalog_cache
+          key: ${{ steps.key.outputs.key }}
+
       - name: Place gold next to the site
         run: mkdir -p web/gold && cp -a data/gold/. web/gold/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' || inputs.deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4

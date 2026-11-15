@@ -90,7 +90,7 @@ def targets_table(targets: list[dict], size_deg: float) -> pd.DataFrame:
 
 # --- Disk ---------------------------------------------------------------------------------------
 def build_gold(
-    target_id: str | None = None,
+    target_id: str | list[str] | None = None,
     *,
     root: Path | None = None,
     gold_dir: Path | None = None,
@@ -99,6 +99,8 @@ def build_gold(
     trajectory: RowsFunction | None = ai_trajectory,
 ) -> dict[str, int]:
     """Build and check gold; return the rows of every table. None skips an AI table (empty).
+
+    `target_id` is one target, a list of them, or None for every target with silver sums.
 
     Raises:
         FileNotFoundError: silver is missing.
@@ -112,7 +114,10 @@ def build_gold(
         if not path.is_file():
             raise FileNotFoundError(f"{path.name} is missing in silver: run the silver step first")
     sums = pq.read_table(sums_table_path(root)).to_pandas()
-    real = sorted(set(sums.target_id)) if target_id is None else [target_id]
+    if target_id is None:
+        real = sorted(set(sums.target_id))
+    else:
+        real = [target_id] if isinstance(target_id, str) else list(target_id)
     known = {t["id"]: t for t in config["targets"]}
     unknown = [t for t in real if t not in known or t not in set(sums.target_id)]
     if unknown:

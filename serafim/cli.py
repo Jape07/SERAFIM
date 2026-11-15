@@ -6,7 +6,8 @@
 - `python -m serafim alignment [--target X]`: sums against Gaia, in docs/alignment.md (D5).
 - `python -m serafim png [--target X]`: PNG of sums, differences and color in data/gold/ (D7).
 - `python -m serafim gold [--target X]`: real gold (tables, meta.json, PNGs), validated (D8).
-- `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
+- `python -m serafim run [--target X] [--from silver]`: the whole pipeline for the targets in
+  settings.publish (task D9); what publish.yml runs.
 
 Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
 """
@@ -71,8 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
     gold_cmd.add_argument("--no-spectra", action="store_true",
                           help="Write spectra.parquet empty (no photometry on bronze).")
 
-    run =commands.add_parser("run", help="Run the full pipeline (task D9).")
-    run.add_argument("--target", help=TARGET_HELP)
+    run = commands.add_parser(
+        "run", help="Bronze, silver and gold for the targets in settings.publish (task D9)."
+    )
+    run.add_argument("--target", help="Only this published target for bronze and silver "
+                                      "(gold always has every published target).")
     run.add_argument(
         "--from",
         dest="start",
@@ -101,8 +105,21 @@ def main(argv: list[str] | None = None) -> int:
                     spectra=not args.no_spectra)
     if args.command == "png":
         return png(args.target, Path(args.out))
-    log.error("Command '%s' is not implemented yet (task D9).", args.command)
-    return 1
+    return full_run(args.target, args.start)
+
+
+def full_run(target_id: str | None, start: str) -> int:
+    """The whole pipeline; 1 if a step fails (gold is then left as it was)."""
+    from serafim.bronze.download import ArchiveError
+    from serafim.pipeline import run
+
+    try:
+        counts = run(target_id, start=start)
+    except (ArchiveError, FileNotFoundError, ValueError) as error:  # incl. GoldValidationError
+        log.error("%s", error)
+        return 1
+    log.info("Pipeline done: %s", counts)
+    return 0
 
 
 def bronze(target_id: str | None) -> int:
