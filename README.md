@@ -47,7 +47,8 @@ SERAFIM/
 ├─ web/                     static site (web)
 │  ├─ index.html, viewer.html, catalog.html, about.html
 │  ├─ css/styles.css
-│  ├─ js/data.js, js/viewer.js, js/home.js, js/catalog.js
+│  ├─ js/data.js, js/app.js
+│  ├─ img/                  SPHEREx reference images (NASA/JPL-Caltech)
 │  ├─ texts/examples.json   guided example texts (written by AI & validation)
 │  └─ gold/                 local copy of gold (git-ignored)
 ├─ config/targets.yaml      the 5 challenge targets (python -m serafim.validation.targets)
@@ -90,7 +91,7 @@ The role documents are in Spanish; everything in this repo is in English.
 | `modelos/`, `config/regiones.yaml` | `models/`, `config/regions.yaml` |
 | `restar()`, `recorte()` | `subtract()`, `cutout()` |
 | `visor.html`, `catalogo.html`, `acerca.html` | `viewer.html`, `catalog.html`, `about.html` |
-| `css/estilos.css`, `js/datos.js`, `js/visor.js`, `js/inicio.js`, `js/catalogo.js` | `css/styles.css`, `js/data.js`, `js/viewer.js`, `js/home.js`, `js/catalog.js` |
+| `css/estilos.css`, `js/datos.js`, `js/visor.js`, `js/inicio.js`, `js/catalogo.js` | `css/styles.css`, `js/data.js`, `js/app.js` |
 | `textos/ejemplos.json` | `texts/examples.json` |
 | `publicar.yml` | `publish.yml` |
 | `polo`, `asteroide`, `estrella variable` | `pole`, `asteroid`, `variable_star` |
