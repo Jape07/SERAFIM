@@ -172,26 +172,32 @@ def measure_sum(arrays: dict, detector: int, target: dict, near=None, saturates=
 # --- One target ---------------------------------------------------------------------------------
 
 
-def sum_cells(target_id: str, root: Path | None = None) -> list[tuple[int, int, Path]]:
-    """(detector, season, path) of every sum of one detector and one season on disk."""
+def sum_cells(
+    target_id: str, root: Path | None = None, *, all_seasons: bool = False
+) -> list[tuple[int, int, Path]]:
+    """(detector, season, path) of every sum of one detector and one season on disk; with
+    `all_seasons`, also the sums of every season together (season 0)."""
     from serafim.silver.store import silver_dir
 
     folder = silver_dir(root) / target_id / "sums"
     cells = []
     for path in sorted(folder.glob("d*_s*.npz")):
         found = _SUM_NAME.search(path.name)
-        if found and int(found.group(1)) >= 1 and int(found.group(2)) >= 1:
+        if found and int(found.group(1)) >= 1 and (int(found.group(2)) >= 1 or all_seasons):
             cells.append((int(found.group(1)), int(found.group(2)), path))
     return cells
 
 
-def measure_target(target: dict, root: Path | None = None) -> pd.DataFrame:
-    """One row per sum (detector, season) with the fitted position or the reason it has none."""
+def measure_target(
+    target: dict, root: Path | None = None, *, all_seasons: bool = False
+) -> pd.DataFrame:
+    """One row per sum (detector, season) with the fitted position or the reason it has none;
+    `all_seasons` adds the sums of every season together (season 0, used by task A6)."""
     from serafim.silver.store import load_sum
     from serafim.validation.spectra import _full
 
     full = _full(target)
-    cells = sum_cells(target["id"], root)
+    cells = sum_cells(target["id"], root, all_seasons=all_seasons)
     if not cells:
         return pd.DataFrame()
     mjds = {}

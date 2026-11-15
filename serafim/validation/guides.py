@@ -41,11 +41,14 @@ PERIOD_DAYS = {"r_dra": 247.2}
 PERIOD_SOURCE = "SIMBAD mesVar, Gaia DR3 long-period variables (2022yCat.1358)"
 
 # Where SPHEREx really shows the target, from the visibility check on real frames
-# (docs/visibility.md, PR #50). The first detector is the one the viewer opens.
-# WISE 0855: S/N 9.6 in D6 and 6.3 in D5 (every season added), not seen in D1-D4.
+# (docs/visibility.md, PR #50) and the verification of the real gold (docs/verification.md,
+# task A6). The first detector is the one the viewer opens.
+# WISE 0855: S/N 9.6 in D6 and 6.3 in D5 in a stack that follows it, but in the site's images
+# (every season added on a grid fixed on the sky, where it smears by 1.3 px) only D6 reaches
+# S/N 5; D5 stays at 4. Not seen in D1-D4.
 # Barnard's Star: its motion measured on the ring matches the catalog to 0.1 px in D5-D6,
 # where its saturated center is smallest.
-SEEN_DETECTORS = {"wise_0855": (6, 5), "barnard": (5, 6)}
+SEEN_DETECTORS = {"wise_0855": (6,), "barnard": (5, 6)}
 
 # Brightness change of the saturated targets, measured on the light around their saturated
 # core (python -m serafim.validation.light_curves -> docs/light_curves.json). Barnard's Star,
@@ -55,6 +58,9 @@ LIGHT_CURVES_PATH = targets.ROOT / "docs" / "light_curves.json"
 # in the text only when its error is under MOTION_MAX_ERROR of the value
 TRAJECTORY_PATH = targets.ROOT / "docs" / "trajectory.json"
 MOTION_MAX_ERROR = 0.1
+# What the real gold paints as saturated (python -m serafim.validation.verification, task A6):
+# the saturation sentence follows the site's images when this file exists, else task A1's check
+VERIFICATION_PATH = targets.ROOT / "docs" / "verification.json"
 CHANGE_THRESHOLD = 0.3
 MAX_RATIO_ERROR = 0.3
 MIN_FRAMES = 3  # a season ratio from fewer frames is not told
@@ -401,8 +407,8 @@ def _wise_0855(target: dict, facts: dict) -> dict:
         "mode": "all_seasons",
         "seasons": [0, *with_best],
         "how": (
-            f"Detector {best}, or {SEEN_DETECTORS['wise_0855'][1]} with every season added. "
-            "It does not show in detectors 1 to 4."
+            f"Detector {best} only: in detector 5 it is too faint for these images, and it "
+            "does not show in detectors 1 to 4."
         ),
         "watch_out": [
             f"A background star sits next to its path: {pixels[first['season']]:.1f} pixels "
@@ -572,11 +578,26 @@ WRITERS = {
 }
 
 
-def _saturated_text(target: dict) -> str:
-    """How often the center saturates, from the frames checked in task A1."""
+def saturation_claims(target: dict) -> tuple[list[int], list[int]]:
+    """(detectors whose center is saturated in every season, in only some) as the guide says.
+
+    From the real gold (docs/verification.json, task A6) when it has the target, so the text
+    matches the images; else from the frames checked in task A1 (config/targets.yaml).
+    """
+    if VERIFICATION_PATH.exists():
+        verified = json.loads(VERIFICATION_PATH.read_text(encoding="utf-8")).get(target["id"])
+        painted = (verified or {}).get("saturated") or {}
+        if painted.get("always") or painted.get("sometimes"):
+            return painted["always"], painted["sometimes"]
     rows = [row for row in target["saturation"] if row["checked"]]
     always = [row["detector"] for row in rows if row["saturated"] == row["checked"]]
     sometimes = [row["detector"] for row in rows if 0 < row["saturated"] < row["checked"]]
+    return always, sometimes
+
+
+def _saturated_text(target: dict) -> str:
+    """How often the center saturates (saturation_claims())."""
+    always, sometimes = saturation_claims(target)
     if len(always) == 6:
         state = "saturated in every detector"
     elif always and sometimes:

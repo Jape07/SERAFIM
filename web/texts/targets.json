@@ -99,8 +99,7 @@
       "what_to_look_at": "Open detector 6 with every season added: the faint dot at the center, right where WISE puts it. It moved about 1.3 pixels west (to the right) over the year, a shift too small to follow season by season.",
       "how_to_look": {
         "detectors": [
-          6,
-          5
+          6
         ],
         "mode": "all_seasons",
         "seasons": [
@@ -108,7 +107,7 @@
           2,
           3
         ],
-        "text": "Detector 6, or 5 with every season added. It does not show in detectors 1 to 4."
+        "text": "Detector 6 only: in detector 5 it is too faint for these images, and it does not show in detectors 1 to 4."
       },
       "watch_out": [
         "A background star sits next to its path: 1.9 pixels away in May 2025, 0.8 in May 2026. In detectors 1 to 4, the dot at the center is that star, not WISE 0855.",
@@ -128,8 +127,7 @@
         "measured_motion_arcsec_per_year": 8.662,
         "measured_motion_error_arcsec_per_year": 3.177,
         "seen_in_detectors": [
-          6,
-          5
+          6
         ],
         "neighbour_star": {
           "name": "Gaia DR3 5756956644387831296",
@@ -162,7 +160,7 @@
         "text": "Detector 1 (it saturates the least), one season at a time."
       },
       "watch_out": [
-        "It is so bright that its center is always saturated in detectors 2, 3, 4, 5 and 6, and sometimes in detector 1: the camera got more light than it can count. Those pixels are painted with the brightest color.",
+        "It is so bright that its center is always saturated in detectors 2, 4, 5 and 6, and sometimes in detectors 1 and 3: the camera got more light than it can count. Those pixels are painted with the brightest color.",
         "Compare the size of its glow rather than its center: a brighter star looks bigger."
       ],
       "facts": {
