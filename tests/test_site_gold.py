@@ -13,9 +13,14 @@ def test_published_gold_includes_every_target(tmp_path):
     write_all_targets(gold, config)
     contract.validate_gold(gold)
 
-    # Until the new contract (task D2), each target is written as one region.
-    regions = pq.read_table(gold / "regions.parquet").to_pylist()
-    frames = pq.read_table(gold / "frames.parquet")
-    ids = [row["region_id"] for row in regions]
-    assert ids == [target["id"] for target in config["targets"]]
-    assert frames.num_rows == 10 * len(ids)
+    ids = [target["id"] for target in config["targets"]]
+    targets = pq.read_table(gold / "targets.parquet").to_pylist()
+    assert [row["target_id"] for row in targets] == ids
+
+    # Every target has the same shape: 17 detector-season cells with 3 frames each.
+    frames = pq.read_table(gold / "frames.parquet").to_pandas()
+    sums = pq.read_table(gold / "sums.parquet").to_pandas()
+    assert frames.groupby("target_id").size().to_dict() == dict.fromkeys(ids, 51)
+    assert set(sums.target_id) == set(ids)
+    for target_id in ids:
+        assert (gold / contract.sum_png(target_id, 3, 1)).is_file()

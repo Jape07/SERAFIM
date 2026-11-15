@@ -67,19 +67,42 @@ SERAFIM/
 
 ## Gold contract
 
-The source of truth is [`serafim/contract.py`](serafim/contract.py). Agreed at H0; any change
-needs approval from all three roles.
+The source of truth is [`serafim/contract.py`](serafim/contract.py). Agreed in issue #18
+(task D2); any change needs approval from all three roles.
 
-| File | One row per | Columns |
-| --- | --- | --- |
-| `regions.parquet` | region | region_id, name, ra, dec, size_deg, wcs_json |
-| `frames.parquet` | image at one date | frame_id, region_id, obs_id, date_utc, wavelength_um, bandwidth_um, png, png_diff |
-| `detections.parquet` | change found in a difference image | detection_id, frame_id, object_id, ra, dec, x_px, y_px, snr, sign, p_real |
-| `objects.parquet` | grouped object | object_id, region_id, name, type, status, reason, catalog, url, n_detections, first_date_utc, last_date_utc |
-| `meta.json` | pipeline run | run_date_utc, commit, n_frames |
+| File | One row per | Columns | Filled by |
+| --- | --- | --- | --- |
+| `targets.parquet` | target | target_id, name, kind, ra_now, dec_now, pmra_mas_yr, pmdec_mas_yr, size_deg, wcs_json | data |
+| `frames.parquet` | single exposure | frame_id, target_id, obs_id, collection, date_utc, season, detector, wavelength_um, bandwidth_um, flags, saturated | data |
+| `sums.parquet` | detector × season | sum_id, target_id, detector, season, mean_date_utc, n_frames, background_noise, flags, saturated, png | data |
+| `differences.parquet` | detector × pair of seasons | difference_id, target_id, detector, season_a, season_b, png | data |
+| `catalogs.parquet` | catalog source at one date | target_id, catalog, name, season, date_utc, ra, dec, mag, mag_band, url | AI |
+| `spectra.parquet` | photometry point | target_id, frame_id, season, date_utc, wavelength_um, flux_mjy, error_mjy, flag | AI |
+| `trajectory.parquet` | target × season | target_id, season, ra_measured, dec_measured, error_arcsec, ra_catalog, dec_catalog | AI |
+| `meta.json` | pipeline run | run_date_utc, commit, collections, last_frame_date_utc, n_frames | data |
 
-`status` can only be `Known`, `Unidentified candidate` or `Discarded`. Never call a candidate a
-"new object".
+- **The image the site shows is the sum** of the frames of one detector (1 to 6) in one season.
+  Differences are between seasons, season b minus season a.
+- **`detector = 0`** is the white image (all detectors of that season) and **`season = 0`** is
+  every season of that detector.
+- **`catalogs`** has each source moved to `date_utc`, so the markers move with the video: for
+  Gaia, CatWISE and SIMBAD the mean date of each season, and `season = 0` for the mean date of
+  every frame. SkyBoT has one row per visit, so an asteroid has several rows in a season.
+  `mag` is in the band `mag_band`: `G` (Gaia), `W2` (CatWISE) or `V` (SIMBAD, SkyBoT).
+- **A cell without frames has no row and no PNG**: the site skips it. The color image
+  needs detectors 1, 3 and 6, so it does not exist in a season that lacks one of them.
+- **PNG names** (relative to `gold/`, never changed without telling web):
+  `png/<target>/sum_d<detector>_s<season>.png`, `png/<target>/diff_d<detector>_s<a>-s<b>.png`
+  and `png/<target>/color_s<season>.png`.
+- **`kind`** is `motion`, `brightness`, `spectrum` or `custom` (targets added by coordinates).
+- **`flags`** is text with the flag names separated by commas, never `SOURCE`
+  (for example `BLOOM,OVERFLOW`; empty when none). In pandas use `df["flags"]`, because
+  `df.flags` is a pandas attribute.
+- **`saturated`** means the target pixel is empty (OVERFLOW or NONLINEAR): the site shows
+  "saturated center". The PNGs paint those pixels with the brightest color.
+
+`python -m serafim mock` writes simulated gold that follows this contract (one target, 6
+detectors, 3 seasons, one missing cell and a saturated center); `--all-targets` writes all 5.
 
 ## Spanish → English names
 
