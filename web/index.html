@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0,0&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=home3">
+  <link rel="stylesheet" href="css/styles.css?v=gifstory2">
   <script>
     if (localStorage.getItem("serafim-console") === "dark") document.documentElement.dataset.theme = "dark";
   </script>
@@ -226,45 +226,59 @@
     </section>
 
     <section id="creador-gif">
-      <p class="kicker" data-i18n="gifKicker">Citizen science &amp; outreach</p>
-      <h2 data-i18n="gifTitle">Motion discovery GIF creator</h2>
+      <p class="kicker" data-i18n="gifKicker">Citizen Science &amp; Outreach</p>
+      <h2 data-i18n="gifTitle">Motion Discovery GIF Creator</h2>
       <p class="intro" data-i18n="gifLead">Create a short animated sequence to share astronomical discoveries, object motion, or brightness changes detected in SPHEREx observations.</p>
       <div class="gif-layout">
         <div class="gif-controls">
-          <div class="mini gif-avail">
-            <span data-i18n="framesAvailable">Available observations</span>
-            <strong id="gif-available">—</strong>
-          </div>
-          <div>
-            <div class="label" data-i18n="frameCount">Number of frames</div>
-            <div class="choice" id="gif-count">
-              <button type="button" data-n="2">2</button>
-              <button type="button" data-n="4" aria-pressed="true">4</button>
-              <button type="button" data-n="8">8</button>
+          <div class="gif-observe">
+            <span class="material-symbols-outlined" aria-hidden="true">satellite_alt</span>
+            <div>
+              <span data-i18n="framesAvailable">Available observations</span>
+              <strong id="gif-available">—</strong>
             </div>
           </div>
-          <div>
-            <div class="label" data-i18n="cadence">Playback speed</div>
-            <div class="choice" id="gif-speed">
-              <button type="button" data-ms="800" data-i18n="slow">Slow</button>
-              <button type="button" data-ms="450" data-i18n="gifNormal" aria-pressed="true">Normal</button>
-              <button type="button" data-ms="220" data-i18n="fast">Fast</button>
+          <div class="gif-settings">
+            <div>
+              <div class="label" data-i18n="frameCount">Number of frames</div>
+              <div class="choice" id="gif-count">
+                <button type="button" data-n="2">2</button>
+                <button type="button" data-n="4" aria-pressed="true">4</button>
+                <button type="button" data-n="8">8</button>
+              </div>
+            </div>
+            <div>
+              <div class="label" data-i18n="cadence">Playback speed</div>
+              <div class="choice" id="gif-speed">
+                <button type="button" data-ms="800" data-i18n="slow">Slow</button>
+                <button type="button" data-ms="450" data-i18n="gifNormal" aria-pressed="true">Normal</button>
+                <button type="button" data-ms="220" data-i18n="fast">Fast</button>
+              </div>
             </div>
           </div>
           <div class="duration" id="gif-duration" data-i18n="durationEmpty">Estimated duration: —</div>
-          <button class="primary wide" id="gif-make" type="button"><span class="material-symbols-outlined">movie</span> <span data-i18n="makeGif">Generate GIF</span></button>
-          <button class="ghost wide" id="gif-save" type="button" disabled><span class="material-symbols-outlined">ios_share</span> <span data-i18n="saveGif">Download / Share</span></button>
-          <p class="hint" id="gif-note"></p>
+          <div class="gif-actions">
+            <button class="primary wide" id="gif-make" type="button"><span class="material-symbols-outlined">movie</span> <span data-i18n="makeGif">Generate GIF</span></button>
+            <button class="ghost wide" id="gif-save" type="button" disabled><span class="material-symbols-outlined">ios_share</span> <span data-i18n="saveGif">Download / Share</span></button>
+            <p class="hint" id="gif-note"></p>
+          </div>
         </div>
         <div class="gif-story">
           <div class="sky gif-stage">
             <img id="gif-preview" data-i18n="previewAlt" data-i18n-attr="alt" alt="Animation preview">
-            <span class="gif-chip tl" data-i18n="preview">Observation preview</span>
-            <span class="gif-chip tr" data-i18n="gifMission">SPHEREx temporal observation</span>
-            <span class="gif-chip bl" data-i18n="gifMotion">Motion detected</span>
-            <span class="gif-chip br" data-i18n="gifLoop">Automated loop</span>
+            <svg class="gif-corners" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <path vector-effect="non-scaling-stroke" d="M1.2 16 V1.2 H16 M84 1.2 H98.8 V16 M98.8 84 V98.8 H84 M16 98.8 H1.2 V84" fill="none" stroke="#f5c400" stroke-width="1.4"/>
+            </svg>
+            <span class="gif-chip tl" data-i18n="preview">Observation Preview</span>
+            <span class="gif-chip tr" data-i18n="gifMission">SPHEREx Temporal Observation</span>
+            <span class="gif-chip bl" data-i18n="gifMotion">Motion Detected</span>
+            <span class="gif-chip br" data-i18n="gifLoop">Automated Loop</span>
           </div>
-          <p class="hint" data-i18n="gifHint">This animation visualizes the apparent motion detected across multiple SPHEREx observation periods. The generated GIF can be shared for outreach, education, and citizen science activities.</p>
+          <div class="gif-rail">
+            <span data-i18n="gifSeasons">Seasonal observations</span>
+            <div id="gif-seasons"></div>
+          </div>
+          <p class="gif-context" data-i18n="gifHint">This animation visualizes the apparent motion detected across multiple SPHEREx observation periods. The generated GIF can be shared for outreach, education, and citizen science activities.</p>
         </div>
       </div>
     </section>
@@ -310,6 +324,6 @@
     </ol>
     <button class="primary" id="help-close" type="button" data-i18n="helpClose">Close</button>
   </dialog>
-  <script type="module" src="js/app.js?v=home1"></script>
+  <script type="module" src="js/app.js?v=gifstory3"></script>
 </body>
 </html>

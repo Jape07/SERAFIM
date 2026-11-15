@@ -1,5 +1,5 @@
 import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=home1";
+import { apply, lang, onChange, t } from "./i18n.js?v=gifstory2";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -1605,6 +1605,26 @@ function updateGifLabel() {
   put("#gif-duration", t("duration", { seconds: seconds.toFixed(1) }));
 }
 
+function gifSeasonLabel(frame) {
+  if (!frame) return "—";
+  if (frame.season_a != null && frame.season_b != null) return `S${frame.season_a}–S${frame.season_b}`;
+  if (frame.season === 0) return t("gifAllSeasons");
+  if (frame.season != null) return `S${frame.season}`;
+  return "—";
+}
+
+function paintGifSeasons(active) {
+  const host = document.querySelector("#gif-seasons");
+  if (!host) return;
+  host.replaceChildren();
+  gifFrames.forEach((frame, step) => {
+    const mark = document.createElement("span");
+    mark.textContent = gifSeasonLabel(frame);
+    if (step === active) mark.className = "on";
+    host.append(mark);
+  });
+}
+
 function restartPreview() {
   clearInterval(gifTimer);
   gifFrames = sample(sequence, gifCount);
@@ -1618,8 +1638,11 @@ function restartPreview() {
   updateGifLabel();
   const preview = document.querySelector("#gif-preview");
   const show = () => {
-    const frame = gifFrames[gifStep % Math.max(gifFrames.length, 1)];
+    const count = Math.max(gifFrames.length, 1);
+    const at = gifStep % count;
+    const frame = gifFrames[at];
     if (frame) preview.src = skyFor(viewerPicture(frame));
+    paintGifSeasons(frame ? at : -1);
     gifStep += 1;
   };
   show();
