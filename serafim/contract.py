@@ -460,8 +460,9 @@ def _check_values(tables: dict[str, pd.DataFrame], errors: list[str]) -> None:
 
     if "spectra.parquet" in tables:
         t = tables["spectra.parquet"]
-        low, high = WAVELENGTH_RANGE_UM
-        check("spectra.parquet", f"wavelength_um outside [{low}, {high}]",
+        # A point is one frame: the same margin as frames.parquet at the edges of the range.
+        low, high = WAVELENGTH_RANGE_UM[0] - BAND_MARGIN_UM, WAVELENGTH_RANGE_UM[1] + BAND_MARGIN_UM
+        check("spectra.parquet", f"wavelength_um outside [{low:.3f}, {high:.3f}]",
               outside(t.wavelength_um, low, high, True))
         check("spectra.parquet", "season must be 1 or more", t.season < 1)
         check("spectra.parquet", "error_mjy must be >= 0", t.error_mjy < 0)
