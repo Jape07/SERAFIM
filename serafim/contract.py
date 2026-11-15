@@ -69,6 +69,10 @@ DETECTOR_BANDS_UM = {
     6: (4.412, 5.010),
 }
 WAVELENGTH_RANGE_UM = (DETECTOR_BANDS_UM[1][0], DETECTOR_BANDS_UM[6][1])
+# The bands above are SIA's em_min/em_max. At the edge of a detector IRSA's spectral WCS gives a
+# wavelength up to 0.014 um outside them (measured at the target in 18 of the 874 bronze frames),
+# so a frame may be this far outside its band.
+BAND_MARGIN_UM = 0.02
 COLOR_DETECTORS = (1, 3, 6)  # blue, green and red of the color image
 
 # --- Schemas -----------------------------------------------------------------
@@ -408,8 +412,10 @@ def _check_values(tables: dict[str, pd.DataFrame], errors: list[str]) -> None:
         # Each wavelength has to fall inside the band of its own detector.
         low = t.detector.map({d: band[0] for d, band in DETECTOR_BANDS_UM.items()})
         high = t.detector.map({d: band[1] for d, band in DETECTOR_BANDS_UM.items()})
-        inside = (t.wavelength_um >= low) & (t.wavelength_um <= high)
-        check(name, "wavelength_um outside the band of its detector", low.notna() & ~inside)
+        margin = BAND_MARGIN_UM
+        inside = (t.wavelength_um >= low - margin) & (t.wavelength_um <= high + margin)
+        check(name, f"wavelength_um outside the band of its detector (+/- {BAND_MARGIN_UM} um)",
+              low.notna() & ~inside)
         check(name, "bandwidth_um must be > 0", positive(t.bandwidth_um))
         flags(name)
         expected = [frame_id(r.target_id, r.obs_id) for r in t.itertuples()]
