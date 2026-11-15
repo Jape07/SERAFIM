@@ -259,6 +259,8 @@ def test_empty_ai_tables_are_valid(gold):
         ("targets.parquet", "size_deg", 0.0, "size_deg must be > 0"),
         # 4.9 um is inside detector 6, but this is a detector 1 frame.
         ("frames.parquet", "wavelength_um", 4.9, "wavelength_um outside the band of its detector"),
+        # Row 0 is detector 1 (0.746 to 1.117 um): 0.72 is beyond the 0.02 um margin.
+        ("frames.parquet", "wavelength_um", 0.72, "wavelength_um outside the band of its detector"),
         ("frames.parquet", "detector", 0, "detector must be 1 to 6"),
         ("frames.parquet", "detector", 7, "detector must be 1 to 6"),
         ("frames.parquet", "season", 0, "season must be 1 or more"),
@@ -291,6 +293,12 @@ def test_empty_ai_tables_are_valid(gold):
 def test_rejects_bad_values(gold, filename, column, value, expected):
     set_value(gold, filename, column, 0, value)
     assert any(expected in problem for problem in problems(gold)), problems(gold)
+
+
+def test_a_wavelength_at_the_edge_of_the_detector_is_accepted(gold):
+    # A real Barnard frame at the edge of detector 1 measured 0.7414 um (band from 0.746).
+    set_value(gold, "frames.parquet", "wavelength_um", 0, 0.7414)
+    contract.validate_gold(gold)
 
 
 def test_rejects_repeated_keys(gold):

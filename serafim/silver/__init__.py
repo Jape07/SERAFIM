@@ -18,4 +18,10 @@ Layout (agreed with AI & validation, who reads it for the spectra, the trajector
 Every `.npz` has only numpy arrays (float32, bool, int16) and the WCS as text in `wcs_json`,
 so it opens with `numpy.load(path)` anywhere, without `serafim` and without pickle. Arrays are
 `array[y, x]` with row 0 = south (see grid.py).
+
+Read silver with `load_frame()` (and `load_sum()`, `load_difference()` in D5 and D6).
 """
+
+from serafim.silver.store import load_frame
+
+__all__ = ["load_frame"]
