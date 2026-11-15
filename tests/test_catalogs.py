@@ -259,6 +259,31 @@ def test_gaia_variable_flag(monkeypatch):
     assert result["name"].iloc[0] == "Gaia DR3 1441146387496625536"
 
 
+def test_gaia_comes_from_the_fixed_copy_without_the_network(monkeypatch):
+    """config/gaia_snapshot/ holds Barnard's field: publish runs stop waiting for ESA."""
+
+    def no_network(*args, **kwargs):
+        raise AssertionError("the archive was queried")
+
+    monkeypatch.setattr(catalogs, "_query_gaia", no_network)
+    barnard = SkyCoord(269.446074 * u.deg, 4.770703 * u.deg)
+    result = catalogs.gaia(barnard, catalogs._region_radius(0.25), max_mag=18)
+    assert list(result.columns) == catalogs.COLUMNS
+    assert len(result) > 1000 and (result["mag"] < 18).all()
+    assert (result["catalog"] == "Gaia").all()
+
+
+def test_gaia_outside_the_copies_asks_the_archive(monkeypatch):
+    fake = install_fake(monkeypatch, "gaia")
+    catalogs.gaia(SkyCoord(10 * u.deg, 10 * u.deg), 0.1 * u.deg)  # no copy there
+    assert fake.calls == 1
+    barnard = SkyCoord(269.446074 * u.deg, 4.770703 * u.deg)
+    catalogs.gaia(barnard, 0.05 * u.deg, max_mag=20)  # the copy only goes to G < 19
+    assert fake.calls == 2
+    catalogs.gaia(barnard, 0.5 * u.deg, max_mag=18)  # wider than the 0.2 deg copy
+    assert fake.calls == 3
+
+
 # --- Motion columns ---------------------------------------------------------------------
 
 

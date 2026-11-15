@@ -119,8 +119,18 @@ def simbad(center: SkyCoord, radius: Angle | u.Quantity) -> pd.DataFrame:
 def gaia(
     center: SkyCoord, radius: Angle | u.Quantity, max_mag: float = GAIA_MAX_MAG
 ) -> pd.DataFrame:
-    """Gaia DR3 sources brighter than max_mag (G band) inside the cone."""
+    """Gaia DR3 sources brighter than max_mag (G band) inside the cone.
+
+    First from the fixed copy in config/gaia_snapshot/ (Gaia DR3 never changes) when one holds
+    the whole cone down to max_mag: no network, so a publish run no longer waits for ESA's
+    archive. Otherwise from the cache or the archive, as before.
+    """
+    from serafim.bronze.gaia_snapshot import from_snapshot
+
     radius = Angle(radius)
+    saved = from_snapshot(center, radius, max_mag)
+    if saved is not None:
+        return saved[COLUMNS]
     params = {**_cone(center, radius), "max_mag": max_mag}
     return _cached(
         "gaia", params, lambda: _from_gaia(_query_gaia(center, radius, max_mag)), COLUMNS
