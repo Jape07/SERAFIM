@@ -57,7 +57,7 @@ from serafim.bronze.download import read_manifest
 from serafim.config import ROOT, load_config
 from serafim.gold.export import to_contract_table
 from serafim.silver.grid import target_wcs, wcs_to_json
-from serafim.silver.store import frame_path, frames_table_path
+from serafim.silver.store import frame_path, frames_table_path, save_npz
 from serafim.validation.targets import SATURATION_FLAGS, propagate
 
 log = logging.getLogger("serafim.silver")
@@ -199,7 +199,7 @@ def build_frames(target_id: str | None = None, *, root: Path | None = None,
                     row = frame_row(hdul, target, frame, radius)
                     path = frame_path(name, row["frame_id"], root)
                     if force or not path.is_file():
-                        _save_npz(path, {**frame_arrays(hdul, grid), "wcs_json": wcs_text})
+                        save_npz(path, {**frame_arrays(hdul, grid), "wcs_json": wcs_text})
                         new += 1
             rows.append(row)
         written += new
@@ -207,15 +207,6 @@ def build_frames(target_id: str | None = None, *, root: Path | None = None,
 
     _write_frames_table(pd.DataFrame(rows), wanted, root)
     return written
-
-
-def _save_npz(path: Path, arrays: dict) -> None:
-    """Write the `.npz` through a temporary file, so a cut run never leaves half a file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + ".part")
-    with open(partial, "wb") as file:
-        np.savez_compressed(file, **arrays)
-    partial.replace(path)
 
 
 def _write_frames_table(rows: pd.DataFrame, targets: list[str], root: Path) -> None:
