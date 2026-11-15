@@ -278,6 +278,22 @@
     </ol>
     <button class="ghost" id="help-close" type="button">Cerrar</button>
   </dialog>
+  <script>
+    const themeButton = document.querySelector("#theme");
+    function paintTheme(theme) {
+      const dark = theme === "dark";
+      if (dark) document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+      document.querySelector("#theme-icon").textContent = dark ? "dark_mode" : "light_mode";
+      document.querySelector("#theme-label").textContent = dark ? "Modo oscuro" : "Modo claro";
+      themeButton.setAttribute("aria-pressed", dark ? "true" : "false");
+      localStorage.setItem("serafim-theme", dark ? "dark" : "light");
+    }
+    paintTheme(localStorage.getItem("serafim-theme") === "dark" ? "dark" : "light");
+    themeButton.addEventListener("click", () => {
+      paintTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    });
+  </script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
