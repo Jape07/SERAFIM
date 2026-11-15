@@ -17,7 +17,9 @@ reusing its cached answer, so new frames and new seasons come in; if IRSA does n
 last answer is used and the site stays as it was.
 
 Gold is checked with validate_gold() before it replaces the previous one (gold/build.py), so a
-failed run leaves the previous gold and publish.yml does not deploy.
+failed run leaves the previous gold and publish.yml does not deploy. After gold,
+web/texts/discoveries.json (the moving-object candidates of AI & validation) is rewritten from
+it, so publish.yml uploads it with web/.
 """
 
 from __future__ import annotations
@@ -112,4 +114,20 @@ def run(target_id: str | None = None, *, start: str = "bronze", root: Path | Non
     if not in_gold:
         raise ValueError("No published target has silver sums: nothing to publish.")
     log.info("gold for %s", ", ".join(in_gold))
-    return build_gold(in_gold, root=root)
+    counts = build_gold(in_gold, root=root)
+    refresh_discoveries(root)
+    return counts
+
+
+def refresh_discoveries(root: Path) -> None:
+    """Rewrite web/texts/discoveries.json from the new gold and the silver on disk (AI & validation:
+    the dipole rule and the CNN's opinion), so it matches what the site shows. Gold is already
+    checked and in place: if this fails, the previous file stays and the run goes on."""
+    from serafim.validation import discoveries
+
+    gold = root / "data" / "gold"
+    out = root / "web" / "texts" / "discoveries.json"
+    try:
+        discoveries.main(["--gold", str(gold), "--out", str(out)])
+    except Exception as error:  # any failure: the site keeps the previous candidates
+        warn(f"web/texts/discoveries.json kept as it was: {error}")

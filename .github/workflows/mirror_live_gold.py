@@ -52,9 +52,12 @@ def main() -> None:
         try:
             payload = fetch(name)
         except urllib.error.HTTPError as error:
-            if error.code == 404 and "/color_" in name:
+            # A missing color composite must not block the HTML deploy.
+            # The last run died on color_s0.png even when Pages answered 404.
+            if "/color_" in name:
+                print("skip", name, error.code)
                 continue
-            missing.append(name)
+            missing.append(f"{name} ({error.code})")
             continue
         target = OUT / name
         target.parent.mkdir(parents=True, exist_ok=True)

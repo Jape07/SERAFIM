@@ -11,6 +11,7 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/deploy-web.yml"
+      - ".github/workflows/mirror_live_gold.py"
   workflow_dispatch:
 
 permissions:
