@@ -28,7 +28,7 @@ jobs:
       - name: Install
         run: pip install -e .
       - name: Simulated gold
-        run: python -m serafim mock --all-regions
+        run: python -m serafim mock --all-targets
       - name: Place gold next to the site
         run: mkdir -p web/gold && cp -a data/gold/. web/gold/
       - uses: actions/upload-pages-artifact@v3

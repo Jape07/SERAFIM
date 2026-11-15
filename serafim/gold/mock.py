@@ -179,7 +179,7 @@ def _resolving_power(wavelength_um: float) -> float:
 
 
 def build_mock(region: dict, size_deg: float) -> MockGold:
-    """All simulated gold for one region from config/regions.yaml, in memory."""
+    """All simulated gold for one region (a target, see `target_as_region`), in memory."""
     rng = np.random.default_rng(SEED)
     region_id = region["id"]
     wcs = region_wcs(region["ra"], region["dec"], size_deg)
@@ -322,9 +322,23 @@ def _render(
 
 
 # --- Writing to disk ---------------------------------------------------------
+def target_as_region(target: dict) -> dict:
+    """A target from config/targets.yaml in the shape the current contract calls a region.
+
+    Until the new gold contract (task D2), each target is written as one region,
+    centered on its position today (`ra_now`, `dec_now`).
+    """
+    return {
+        "id": target["id"],
+        "name": target["name"],
+        "ra": float(target["ra_now"]),
+        "dec": float(target["dec_now"]),
+    }
+
+
 def write_mock_gold(gold_dir: Path, config: dict) -> MockGold:
-    """Build simulated gold for the first region in the config and write it to gold_dir."""
-    region = config["regions"][0]
+    """Build simulated gold for the first target in the config and write it to gold_dir."""
+    region = target_as_region(config["targets"][0])
     size_deg = config["settings"]["cutout_size_deg"]
     gold = build_mock(region, size_deg)
 
@@ -347,13 +361,13 @@ def write_mock_gold(gold_dir: Path, config: dict) -> MockGold:
     return gold
 
 
-def write_all_regions(gold_dir: Path, config: dict) -> None:
-    """Simulated gold for every region in the config, for the published site.
+def write_all_targets(gold_dir: Path, config: dict) -> None:
+    """Simulated gold for every target in the config, for the published site.
 
-    ``write_mock_gold`` stays one region: that is what task D1 checks.
+    ``write_mock_gold`` stays one target: that is what the contract tests check.
     """
     size_deg = config["settings"]["cutout_size_deg"]
-    pieces = [build_mock(region, size_deg) for region in config["regions"]]
+    pieces = [build_mock(target_as_region(t), size_deg) for t in config["targets"]]
     tables = {
         name: pd.concat([piece.tables[name] for piece in pieces], ignore_index=True)
         for name in contract.GOLD_TABLES
@@ -366,7 +380,7 @@ def write_all_regions(gold_dir: Path, config: dict) -> None:
             mpimg.imsave(target, png.data, cmap=png.cmap, vmin=png.vmin, vmax=png.vmax)
     write_gold(gold_dir, tables, build_meta(n_frames=len(tables["frames.parquet"])))
     log.info(
-        "simulated gold for %d regions in %s (%d frames)",
+        "simulated gold for %d targets in %s (%d frames)",
         len(pieces),
         gold_dir,
         len(tables["frames.parquet"]),

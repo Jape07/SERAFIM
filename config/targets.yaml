@@ -5,6 +5,7 @@
 
 settings:
   cutout_size_deg: 0.25            # Cutout per target (task D3)
+  max_frames_per_target: 60        # Temporary cap: D1 measures the MB, D3 sets the real cap
   parallel_downloads: 8            # Be nice to IRSA: never more than 8 at once
   retries: 3
   # SIA collections in priority order: when an exposure is in several, the first one wins

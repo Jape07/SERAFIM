@@ -1,8 +1,10 @@
 """Command line: `python -m serafim <command>`.
 
-- `python -m serafim mock`: simulated gold in data/gold/ (task D1, data engineering).
-- `python -m serafim bronze [--region X]`: IRSA cutouts in data/bronze/ (task D2).
-- `python -m serafim run [--region X] [--from silver]`: full pipeline (task D8).
+- `python -m serafim mock [--all-targets]`: simulated gold in data/gold/.
+- `python -m serafim bronze [--target X]`: IRSA cutouts in data/bronze/ (task D3).
+- `python -m serafim run [--target X] [--from silver]`: full pipeline (task D9).
+
+Targets are the ids in config/targets.yaml (barnard, eps_indi_b, wise_0855, rw_aur, r_dra).
 """
 
 from __future__ import annotations
@@ -16,26 +18,28 @@ from serafim.config import load_config
 
 log = logging.getLogger("serafim")
 
+TARGET_HELP = "Only this target (an id from config/targets.yaml)."
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="serafim", description="SERAFIM pipeline.")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    mock = commands.add_parser("mock", help="Write simulated gold to data/gold/ (task D1).")
+    mock = commands.add_parser("mock", help="Write simulated gold to data/gold/.")
     mock.add_argument("--out", default="data/gold", help="Gold folder (default: data/gold).")
     mock.add_argument(
-        "--all-regions",
+        "--all-targets",
         action="store_true",
-        help="Write every region in config/regions.yaml (the published site).",
+        help="Write every target in config/targets.yaml (the published site).",
     )
 
     bronze_cmd = commands.add_parser(
-        "bronze", help="Download IRSA cutouts to data/bronze/ (task D2)."
+        "bronze", help="Download IRSA cutouts to data/bronze/ (task D3)."
     )
-    bronze_cmd.add_argument("--region", help="Only this region (an id from config/regions.yaml).")
+    bronze_cmd.add_argument("--target", help=TARGET_HELP)
 
-    run = commands.add_parser("run", help="Run the full pipeline (task D8).")
-    run.add_argument("--region", help="Only this region (an id from config/regions.yaml).")
+    run = commands.add_parser("run", help="Run the full pipeline (task D9).")
+    run.add_argument("--target", help=TARGET_HELP)
     run.add_argument(
         "--from",
         dest="start",
@@ -52,31 +56,31 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     if args.command == "mock":
-        return mock(Path(args.out), all_regions=args.all_regions)
+        return mock(Path(args.out), all_targets=args.all_targets)
     if args.command == "bronze":
-        return bronze(args.region)
-    log.error("Command '%s' is not implemented yet (task D8).", args.command)
+        return bronze(args.target)
+    log.error("Command '%s' is not implemented yet (task D9).", args.command)
     return 1
 
 
-def bronze(region_id: str | None) -> int:
-    """Download bronze cutouts. Silver and gold stay task D3 and later."""
+def bronze(target_id: str | None) -> int:
+    """Download bronze cutouts. Silver and gold come in later tasks."""
     from serafim.bronze.download import ArchiveError, download
 
     try:
-        download(region_id)
+        download(target_id)
     except ArchiveError as error:
         log.error("%s", error)
         return 1
     return 0
 
 
-def mock(gold_dir: Path, *, all_regions: bool = False) -> int:
+def mock(gold_dir: Path, *, all_targets: bool = False) -> int:
     """Simulated gold, checked against the contract like real gold will be."""
-    from serafim.gold.mock import write_all_regions, write_mock_gold
+    from serafim.gold.mock import write_all_targets, write_mock_gold
 
-    if all_regions:
-        write_all_regions(gold_dir, load_config())
+    if all_targets:
+        write_all_targets(gold_dir, load_config())
     else:
         write_mock_gold(gold_dir, load_config())
     try:

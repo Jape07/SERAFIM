@@ -1,10 +1,11 @@
-"""Bronze layer: SPHEREx cutouts from IRSA, exactly as they arrive (task D2).
+"""Bronze layer: SPHEREx cutouts from IRSA, exactly as they arrive.
 
-Search with ``Irsa.query_sia`` in ``spherex_dr1`` and ``spherex_qr3``. The pole
-also searches the ``_deep`` collections. The same exposure in DR1 and QR3 is
-kept from DR1. Each page asks for a few rows: a wide cone or a large MAXREC
-makes the IRSA proxy return HTTP 502. The cutout itself is
-``settings.cutout_size_deg`` (0.5 deg).
+For each target in config/targets.yaml, search with ``Irsa.query_sia`` around
+its ``ra_now``/``dec_now`` (position corrected for proper motion) in
+``settings.collections``. When the same exposure is in several collections, the
+first one in that list wins (DR1 over QR3). Each page asks for a few rows: a wide
+cone or a large MAXREC makes the IRSA proxy return HTTP 502. The cutout itself
+is ``settings.cutout_size_deg``.
 
 A file already on disk is not downloaded again.
 """
@@ -38,7 +39,7 @@ REQUIRED_HDUS = ("IMAGE", "FLAGS", "VARIANCE", "ZODI", "WCS-WAVE")
 
 MANIFEST_SCHEMA = pa.schema(
     [
-        pa.field("region_id", pa.string()),
+        pa.field("target_id", pa.string()),
         pa.field("obs_id", pa.string()),
         pa.field("collection", pa.string()),
         pa.field("band", pa.string()),
@@ -84,29 +85,36 @@ def fits_has_products(payload: bytes) -> bool:
     return all(name in names for name in REQUIRED_HDUS)
 
 
-def choose_exposures(rows: list[dict], limit: int) -> list[dict]:
-    """One row per obs_id. DR1 wins over QR3. Oldest first, then cut at ``limit``."""
+def choose_exposures(
+    rows: list[dict], limit: int, priority: list[str] | None = None
+) -> list[dict]:
+    """One row per obs_id, oldest first, cut at ``limit``.
+
+    When an exposure is in several collections, the one listed first in
+    ``priority`` wins; without a list, DR1 wins over QR3.
+    """
+
+    def rank(collection: str) -> int:
+        if priority and collection in priority:
+            return priority.index(collection)
+        return _dr1_rank(collection) + (len(priority) if priority else 0)
+
     best: dict[str, dict] = {}
     for row in rows:
         current = best.get(row["obs_id"])
-        if current is None or _dr1_rank(row["collection"]) < _dr1_rank(current["collection"]):
+        if current is None or rank(row["collection"]) < rank(current["collection"]):
             best[row["obs_id"]] = row
     ordered = sorted(best.values(), key=lambda row: (float(row.get("t_min") or 0), row["obs_id"]))
     return ordered[:limit]
 
 
-def collections_for(region: dict, settings: dict) -> list[str]:
-    """Wide collections, plus ``_deep`` when the region asks for them (the pole)."""
-    names: list[str] = []
-    for name in settings.get("collections") or []:
-        names.append(str(name))
-        if region.get("use_deep_collections"):
-            names.append(f"{name}_deep")
-    return names
+def collections_for(settings: dict) -> list[str]:
+    """SIA collections in priority order, as listed in config/targets.yaml."""
+    return [str(name) for name in settings.get("collections") or []]
 
 
 def download(
-    region_id: str | None = None,
+    target_id: str | None = None,
     *,
     root: Path | None = None,
     query=None,
@@ -118,53 +126,53 @@ def download(
     IRSA. An exposure that is already a FITS file under ``data/bronze`` is skipped.
     """
     root = root or ROOT
-    config = load_config(root / "config" / "regions.yaml")
+    config = load_config(root / "config" / "targets.yaml")
     settings = config.get("settings") or {}
-    limit = int(settings.get("max_frames_per_region") or 60)
+    limit = int(settings.get("max_frames_per_target") or 60)
     attempts = int(settings.get("retries") or 3)
     workers = int(settings.get("parallel_downloads") or 8)
-    size_deg = float(settings.get("cutout_size_deg") or 0.5)
+    size_deg = float(settings.get("cutout_size_deg") or 0.25)
+    collections = collections_for(settings)
     query = query or query_collection
     fetch = fetch or fetch_cutout
 
     previous = read_manifest(root)
-    by_key = {(row["region_id"], row["obs_id"]): row for row in previous}
+    by_key = {(row["target_id"], row["obs_id"]): row for row in previous}
     new_rows: list[dict] = []
     kept = 0
 
-    for region in _regions(config, region_id):
-        name = str(region["id"])
+    for target in _targets(config, target_id):
+        name = str(target["id"])
+        ra, dec = float(target["ra_now"]), float(target["dec_now"])
         on_disk = {
             obs_id
-            for (region_name, obs_id), row in by_key.items()
-            if region_name == name and (root / str(row["path"])).is_file()
+            for (target_name, obs_id), row in by_key.items()
+            if target_name == name and (root / str(row["path"])).is_file()
         }
         kept += len(on_disk)
         slots = max(0, limit - len(on_disk))
         log.info(
-            "%s: RA %s, Dec %s, cutout %s deg, %s already on disk.",
+            "target=%s: RA %.4f, Dec %.4f, cutout %s deg, %s already on disk.",
             name,
-            region["ra"],
-            region["dec"],
+            ra,
+            dec,
             size_deg,
             len(on_disk),
         )
         if slots == 0:
             continue
         found: list[dict] = []
-        for collection in collections_for(region, settings):
+        for collection in collections:
             try:
-                found.extend(
-                    query(collection, float(region["ra"]), float(region["dec"]), limit, attempts)
-                )
+                found.extend(query(collection, ra, dec, limit, attempts))
             except ArchiveError as error:
-                log.warning("%s did not answer: %s", collection, error)
+                log.warning("target=%s: %s did not answer: %s", name, collection, error)
         chosen = [
             row
-            for row in choose_exposures(found, limit)
+            for row in choose_exposures(found, limit, collections)
             if row["obs_id"] not in on_disk
         ][:slots]
-        jobs = [_job(region, row, size_deg, attempts, root) for row in chosen]
+        jobs = [_job(name, ra, dec, row, size_deg, attempts, root) for row in chosen]
         for job in _download_all(jobs, workers, fetch):
             record = _record(name, job)
             by_key[(name, job["obs_id"])] = record
@@ -313,28 +321,30 @@ def _get_bytes(url: str, attempts: int) -> bytes:
     raise ArchiveError(last)
 
 
-def _regions(config: dict, region_id: str | None) -> list[dict]:
-    regions = list(config.get("regions") or [])
-    if region_id is None:
-        return regions
-    chosen = [region for region in regions if region.get("id") == region_id]
+def _targets(config: dict, target_id: str | None) -> list[dict]:
+    targets = list(config.get("targets") or [])
+    if target_id is None:
+        return targets
+    chosen = [target for target in targets if target.get("id") == target_id]
     if not chosen:
-        known = ", ".join(str(region.get("id")) for region in regions) or "(none)"
-        raise ArchiveError(f"Unknown region {region_id}. Config has: {known}.")
+        known = ", ".join(str(target.get("id")) for target in targets) or "(none)"
+        raise ArchiveError(f"Unknown target {target_id}. Config has: {known}.")
     return chosen
 
 
-def _job(region: dict, row: dict, size_deg: float, attempts: int, root: Path) -> dict:
+def _job(
+    target_id: str, ra: float, dec: float, row: dict, size_deg: float, attempts: int, root: Path
+) -> dict:
     filename = f"{_safe(row['obs_id'])}.fits"
-    relative = f"data/bronze/{region['id']}/{filename}"
+    relative = f"data/bronze/{target_id}/{filename}"
     return {
         "obs_id": row["obs_id"],
         "collection": row["collection"],
         "band": row.get("band") or "",
         "t_min": float(row.get("t_min") or 0.0),
         "access_url": row["access_url"],
-        "ra": float(region["ra"]),
-        "dec": float(region["dec"]),
+        "ra": ra,
+        "dec": dec,
         "size_deg": size_deg,
         "attempts": attempts,
         "path": relative,
@@ -342,9 +352,9 @@ def _job(region: dict, row: dict, size_deg: float, attempts: int, root: Path) ->
     }
 
 
-def _record(region_id: str, job: dict) -> dict:
+def _record(target_id: str, job: dict) -> dict:
     return {
-        "region_id": region_id,
+        "target_id": target_id,
         "obs_id": job["obs_id"],
         "collection": job["collection"],
         "band": job["band"],

@@ -19,6 +19,9 @@ from serafim.cli import main
 from serafim.config import load_config
 from serafim.gold.mock import write_mock_gold
 
+# The simulated gold uses the first target in config/targets.yaml.
+FIRST_FRAME_PNG = f"{load_config()['targets'][0]['id']}_f000.png"
+
 AGREED_COLUMNS = {
     "regions.parquet": ["region_id", "name", "ra", "dec", "size_deg", "wcs_json"],
     "frames.parquet": [
@@ -175,7 +178,7 @@ def test_cli_mock_writes_valid_gold(tmp_path):
         ("detections.parquet", "object_id", "nope", "object_id not found in objects.parquet"),
         ("detections.parquet", "p_real", 1.4, "p_real outside [0, 1]"),
         ("detections.parquet", "sign", 0, "sign must be +1 or -1"),
-        ("frames.parquet", "png", "/png/pole_f000.png", "must be a relative path"),
+        ("frames.parquet", "png", f"/png/{FIRST_FRAME_PNG}", "must be a relative path"),
         ("frames.parquet", "png", "png/missing.png", "file not found in gold"),
         ("frames.parquet", "frame_id", None, "frame_id has 1 empty values"),
         ("objects.parquet", "n_detections", 99, "n_detections does not match"),
@@ -220,5 +223,5 @@ def test_rejects_meta_that_does_not_match(gold):
 def test_reports_every_problem_at_once(gold):
     set_value(gold, "objects.parquet", "status", 0, "New object")
     set_value(gold, "frames.parquet", "wavelength_um", 0, 9.0)
-    (gold / "png" / "pole_f000.png").unlink()
+    (gold / "png" / FIRST_FRAME_PNG).unlink()
     assert len(problems(gold)) >= 3

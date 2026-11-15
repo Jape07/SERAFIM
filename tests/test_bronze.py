@@ -1,4 +1,4 @@
-"""Bronze download (task D2): DR1 wins, a second run fetches nothing new."""
+"""Bronze download per target: DR1 wins, a second run fetches nothing new."""
 
 import shutil
 from io import BytesIO
@@ -10,18 +10,19 @@ from astropy.io import fits
 from serafim.bronze.download import (
     ArchiveError,
     choose_exposures,
+    collections_for,
     download,
     fits_has_products,
     read_manifest,
 )
 from serafim.cli import main
-from serafim.config import ROOT
+from serafim.config import ROOT, load_config
 
 
 def _config_root(tmp_path: Path) -> Path:
     config = tmp_path / "config"
     config.mkdir()
-    shutil.copy(ROOT / "config" / "regions.yaml", config / "regions.yaml")
+    shutil.copy(ROOT / "config" / "targets.yaml", config / "targets.yaml")
     return tmp_path
 
 
@@ -68,12 +69,21 @@ def test_dr1_wins_when_the_same_exposure_is_in_qr3():
     assert chosen[0]["collection"] == "spherex_dr1"
 
 
-def test_download_keeps_dr1_and_skips_it_the_second_time(tmp_path):
+def test_the_first_collection_in_the_config_wins():
+    priority = collections_for(load_config()["settings"])
+    assert priority[0] == "spherex_dr1"
+    rows = [_row(name) for name in reversed(priority)]
+    assert choose_exposures(rows, limit=10, priority=priority)[0]["collection"] == priority[0]
+
+
+def test_download_uses_the_target_position_today_and_skips_it_the_second_time(tmp_path):
     root = _config_root(tmp_path)
-    calls = {"fetch": 0, "collections": []}
+    barnard = next(t for t in load_config()["targets"] if t["id"] == "barnard")
+    calls = {"fetch": 0, "collections": [], "positions": set()}
 
     def query(collection, ra, dec, limit, attempts):
         calls["collections"].append(collection)
+        calls["positions"].add((ra, dec))
         return [_row(collection)]
 
     def fetch(job):
@@ -81,25 +91,27 @@ def test_download_keeps_dr1_and_skips_it_the_second_time(tmp_path):
         job["destination"].parent.mkdir(parents=True, exist_ok=True)
         job["destination"].write_bytes(_mef())
 
-    assert download("pole", root=root, query=query, fetch=fetch) == 1
+    assert download("barnard", root=root, query=query, fetch=fetch) == 1
     manifest = read_manifest(root)
+    assert manifest[0]["target_id"] == "barnard"
     assert manifest[0]["collection"] == "spherex_dr1"
-    assert manifest[0]["path"] == "data/bronze/pole/visit-1.fits"
+    assert manifest[0]["path"] == "data/bronze/barnard/visit-1.fits"
     assert (root / manifest[0]["path"]).is_file()
-    assert "spherex_dr1_deep" in calls["collections"]
-    assert "spherex_qr3" in calls["collections"]
+    # Every collection in the config is searched, at the position corrected for proper motion.
+    assert calls["collections"] == collections_for(load_config()["settings"])
+    assert calls["positions"] == {(barnard["ra_now"], barnard["dec_now"])}
 
     def fetch_again(job):
         raise AssertionError(f"second run downloaded {job['obs_id']}")
 
-    assert download("pole", root=root, query=query, fetch=fetch_again) == 0
+    assert download("barnard", root=root, query=query, fetch=fetch_again) == 0
 
 
-def test_unknown_region_is_rejected(tmp_path):
+def test_unknown_target_is_rejected(tmp_path):
     root = _config_root(tmp_path)
-    with pytest.raises(ArchiveError, match="Unknown region"):
-        download("not-a-region", root=root, query=lambda *args: [], fetch=lambda job: None)
+    with pytest.raises(ArchiveError, match="Unknown target"):
+        download("not-a-target", root=root, query=lambda *args: [], fetch=lambda job: None)
 
 
-def test_full_pipeline_command_is_still_task_d8():
-    assert main(["run", "--region", "pole"]) == 1
+def test_full_pipeline_command_is_still_to_do():
+    assert main(["run", "--target", "barnard"]) == 1
