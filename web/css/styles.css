@@ -110,14 +110,14 @@ button { cursor: pointer; }
 
 .brand { display: flex; align-items: center; gap: 0.7rem; color: var(--ink); }
 .logo, .mark-logo {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.35rem;
+  height: 2.35rem;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: var(--red);
+  border-radius: 12px;
+  background: #4f46e5;
   color: white;
-  box-shadow: 0 1px 2px rgba(252, 61, 33, 0.35);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28);
 }
 .brand-name { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; letter-spacing: -0.02em; }
 .badge-mini {
@@ -155,7 +155,7 @@ button { cursor: pointer; }
   border-radius: 8px;
 }
 .nav a:hover, .nav a:focus-visible { color: var(--ink); background: var(--surface); }
-.nav a[href="#visor"], .nav a[href="index.html#visor"] {
+.nav a.active {
   background: var(--surface);
   color: var(--ink);
   font-weight: 650;
@@ -201,6 +201,7 @@ button.amber:hover, a.amber:hover { background: color-mix(in srgb, var(--amber) 
 .page { padding: 2.4rem 0 3rem; display: flex; flex-direction: column; gap: 3.5rem; }
 
 .hero { max-width: 44rem; margin-inline: auto; text-align: center; }
+#regiones { margin-top: -1.75rem; }
 .pill {
   display: inline-flex;
   align-items: center;
@@ -270,6 +271,55 @@ h2 { margin: 0 0 0.35rem; font-size: 1.7rem; color: var(--ink); }
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
 }
+#region-cards .flag {
+  background: var(--bg);
+  color: #d97706;
+  padding: 0 0.3rem;
+}
+#region-cards {
+  align-items: stretch;
+  padding-top: 1.35rem;
+  gap: 1rem;
+}
+#region-cards .card {
+  height: 100%;
+  min-height: 11.5rem;
+  border-width: 2px;
+  border-color: var(--line);
+  padding: 1.15rem 1.15rem 1rem;
+}
+#region-cards .card.active { border-color: var(--amber); }
+#region-cards .card p {
+  margin: 0;
+  flex: 1;
+  line-height: 1.45;
+}
+#region-cards .card .wide { margin-top: auto; }
+#region-cards h3 { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
+#region-cards .card-title { align-items: center; }
+#region-cards .tag { flex: none; }
+.region-icon .material-symbols-outlined { font-size: 1.05rem; line-height: 1; }
+@media (min-width: 981px) {
+  #region-cards {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  #region-cards .card { grid-column: span 2; }
+  #region-cards .card:nth-child(4) { grid-column: 2 / span 2; }
+  #region-cards .card:nth-child(5) { grid-column: 4 / span 2; }
+}
+.region-icon {
+  width: 1.7rem;
+  height: 1.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+}
+.region-icon.barnard { color: #f59e0b; background: #fff4d6; }
+.region-icon.eps_indi_b { color: #7c3aed; background: #f3e8ff; }
+.region-icon.wise_0855 { color: #2563eb; background: #e0ecff; }
+.region-icon.rw_aur { color: #e11d48; background: #ffe4ea; }
+.region-icon.r_dra { color: #d97706; background: #fff4d6; }
+.top-inner { flex-wrap: wrap; }
 .card-title { display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
 .code {
   font-family: "JetBrains Mono", ui-monospace, monospace;
