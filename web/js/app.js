@@ -31,6 +31,13 @@ const BLURB = {
   variable_star: "Detección de fluctuaciones de brillo, novas y estrellas pulsantes.",
 };
 const ICON = { pole: "🌌", asteroid: "☄️", variable_star: "⭐" };
+const SKY = {
+  pole: ["ngc-stars.jpg", "ngc-dust.jpg", "cygnus.jpg"],
+  asteroid: ["cygnus.jpg", "vela.jpg", "ice.jpg"],
+  variable_star: ["ice.jpg", "vela.jpg", "ngc-dust.jpg"],
+};
+const CARD = { pole: "ngc-stars.jpg", asteroid: "cygnus.jpg", variable_star: "ice.jpg" };
+const FRAME_PX = 293;
 
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
@@ -81,24 +88,35 @@ function fecha(value) {
   }).format(date);
 }
 
-function goldUrl(relative) {
-  return new URL(`../gold/${relative}`, import.meta.url).href;
+function assetUrl(file) {
+  return new URL(`../img/${file}`, import.meta.url).href;
 }
 
-function loadImage(relative) {
-  if (!relative) return Promise.resolve(null);
-  if (!cache.has(relative)) {
+function skyFile(regionId, frameIndex) {
+  const list = SKY[regionId] || SKY.pole;
+  const at = ((frameIndex % list.length) + list.length) % list.length;
+  return list[at];
+}
+
+function skyFor(frame, frameIndex) {
+  if (!frame) return "";
+  return assetUrl(skyFile(frame.region_id, frameIndex));
+}
+
+function loadImage(url) {
+  if (!url) return Promise.resolve(null);
+  if (!cache.has(url)) {
     cache.set(
-      relative,
+      url,
       new Promise((resolve, reject) => {
         const picture = new Image();
         picture.onload = () => resolve(picture);
-        picture.onerror = () => reject(new Error(`Missing ${relative}`));
-        picture.src = goldUrl(relative);
+        picture.onerror = () => reject(new Error(`Missing ${url}`));
+        picture.src = url;
       }),
     );
   }
-  return cache.get(relative);
+  return cache.get(url);
 }
 
 function regionName(id) {
@@ -156,8 +174,8 @@ function kindFor(object) {
 }
 
 function place(hit) {
-  const width = image.naturalWidth || 1;
-  const height = image.naturalHeight || 1;
+  const width = FRAME_PX;
+  const height = FRAME_PX;
   const col = hit.x_px < width / 3 ? "izquierda" : hit.x_px > (2 * width) / 3 ? "derecha" : "central";
   const row = hit.y_px < height / 3 ? "superior" : hit.y_px > (2 * height) / 3 ? "inferior" : "central";
   if (col === "central" && row === "central") return "Centro";
@@ -187,10 +205,8 @@ function intervalo(fromFrame, toFrame) {
 
 function draw(frame) {
   marks.replaceChildren();
-  const width = image.naturalWidth || 1;
-  const height = image.naturalHeight || 1;
-  marks.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  marks.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  marks.setAttribute("viewBox", `0 0 ${FRAME_PX} ${FRAME_PX}`);
+  marks.setAttribute("preserveAspectRatio", "none");
   for (const hit of hits.filter((item) => item.frame_id === frame.frame_id)) {
     const object = byObject.get(hit.object_id);
     if (!object) continue;
@@ -265,8 +281,9 @@ function fillCompare() {
   const then = document.querySelector("#cmp-then");
   const showingNow = !blinkOn || blinkShowNow;
   const left = showingNow ? frame : baseline;
-  now.src = goldUrl(diffBox.checked && left.png_diff ? left.png_diff : left.png);
-  then.src = goldUrl(baseline.png);
+  const leftIndex = left === frame ? index + (diffBox.checked ? 1 : 0) : 0;
+  now.src = skyFor(left, leftIndex);
+  then.src = skyFor(baseline, 0);
   document.querySelector("#cmp-now-label").textContent = `Fotografía ${showingNow ? "actual" : "base"} (${fecha(left.date_utc)})`;
   document.querySelector("#cmp-then-label").textContent = `Fotografía comparativa (${fecha(baseline.date_utc)})`;
 
@@ -293,8 +310,8 @@ function fillCompare() {
   document.querySelector("#event-move-foot").textContent = biggest && biggest.arcsec >= 1 ? "Desplazamiento medido" : "Sin desplazamiento claro";
 
   document.querySelector("#event-diff").textContent = frame.png_diff
-    ? "Esta exposición tiene imagen diferencia publicada. El visor la muestra con la casilla Diferencia."
-    : "Esta exposición no tiene imagen diferencia.";
+    ? "La diferencia medida sigue en las tablas. En pantalla, la casilla cambia a otra imagen de referencia de SPHEREx."
+    : "Esta exposición no tiene imagen diferencia en las tablas.";
   document.querySelector("#event-diff-foot").textContent = frame.png_diff ? "Disponible" : "No publicada";
   const findings = [named.length > 0, Boolean(biggest && biggest.arcsec >= 1), Boolean(frame.png_diff)].filter(Boolean).length;
   document.querySelector("#cmp-count").textContent = `${findings} hallazgo${findings === 1 ? "" : "s"} entre las dos fechas`;
@@ -303,10 +320,9 @@ function fillCompare() {
 async function render() {
   const frame = sequence[index];
   if (!frame) return;
-  const relative = diffBox.checked && frame.png_diff ? frame.png_diff : frame.png;
-  const picture = await loadImage(relative);
+  const picture = await loadImage(skyFor(frame, index + (diffBox.checked ? 1 : 0)));
   image.src = picture.src;
-  image.alt = `Exposición ${frame.frame_id}`;
+  image.alt = `Imagen de referencia SPHEREx, ${titleOf(frame.region_id)}`;
   draw(frame);
   caption.textContent = `${stamp(frame.date_utc)} · ${frame.wavelength_um} µm · ${index + 1} / ${sequence.length}`;
   slider.value = String(index);
@@ -317,7 +333,7 @@ async function render() {
   history.replaceState(null, "", url);
   fillPanel();
   fillCompare();
-  loadImage(sequence[index + 1]?.png);
+  loadImage(skyFor(sequence[(index + 1) % sequence.length], index + 1));
 }
 
 function move(step) {
@@ -357,7 +373,7 @@ function restartPreview() {
   const preview = document.querySelector("#gif-preview");
   const show = () => {
     const frame = gifFrames[gifStep % Math.max(gifFrames.length, 1)];
-    if (frame) preview.src = goldUrl(frame.png);
+    if (frame) preview.src = skyFor(frame, sequence.indexOf(frame));
     gifStep += 1;
   };
   show();
@@ -375,7 +391,7 @@ async function makeGif() {
     );
     const encoder = GIFEncoder();
     for (const frame of gifFrames) {
-      const picture = await loadImage(frame.png);
+      const picture = await loadImage(skyFor(frame, sequence.indexOf(frame)));
       const canvas = document.createElement("canvas");
       canvas.width = picture.naturalWidth;
       canvas.height = picture.naturalHeight;
@@ -415,6 +431,11 @@ function renderRegions() {
   for (const region of regionList) {
     const card = document.createElement("article");
     card.className = region.region_id === active ? "card active" : "card";
+    const photo = document.createElement("img");
+    photo.className = "card-photo";
+    photo.alt = "";
+    photo.src = assetUrl(CARD[region.region_id] || "cygnus.jpg");
+    card.append(photo);
     if (region.region_id === active) {
       const flag = document.createElement("span");
       flag.className = "flag";
@@ -440,8 +461,9 @@ function renderRegions() {
     button.textContent = region.region_id === active ? "Región en visualización" : "Cargar esta región";
     button.addEventListener("click", () => openRegion(region.region_id, { scroll: true }));
     const body = document.createElement("div");
-    body.append(icon, head, text);
-    card.append(body, button);
+    body.className = "card-body";
+    body.append(icon, head, text, button);
+    card.append(body);
     host.append(card);
   }
 }

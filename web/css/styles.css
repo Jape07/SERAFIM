@@ -305,7 +305,7 @@ h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2rem); font-weight: 700; }
 }
 
 .sky img, .sky svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.sky img { object-fit: contain; }
+.sky img { object-fit: cover; }
 .sky svg { pointer-events: none; }
 .mark { pointer-events: auto; cursor: pointer; }
 .known { fill: none; stroke: #10b981; stroke-width: 2.5; }
@@ -402,16 +402,17 @@ h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2rem); font-weight: 700; }
 .event.new { border-color: #fcd34d; }
 .event.new strong { color: var(--amber-ink); }
 
-.card { padding: 1.15rem; display: flex; flex-direction: column; justify-content: space-between; gap: 0.9rem; background: white; }
+.card { padding: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 0; background: white; overflow: hidden; position: relative; }
+.card-photo { display: block; width: 100%; height: 9.5rem; object-fit: cover; }
+.card-body { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.95rem 1.15rem 1.15rem; }
 .card .icon { font-size: 1.7rem; }
 .card h3 { margin: 0.2rem 0; font-size: 1.15rem; }
 .card.active { border: 2px solid var(--amber); box-shadow: 0 8px 20px rgba(245, 158, 11, 0.16); }
 .card.active h3 { color: #b45309; }
 .flag {
-  position: relative;
-  top: -1.6rem;
-  align-self: end;
-  margin-bottom: -1.2rem;
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
   background: var(--amber);
   color: white;
   font-size: 0.65rem;
