@@ -1,6 +1,6 @@
 """The whole pipeline in one command (task D9): bronze, silver and gold.
 
-    python -m serafim run [--target X] [--from bronze|silver|gold]
+    python -m serafim run [--target X] [--from bronze|silver|gold] [--refresh-search]
 
 The targets are `settings.publish` in config/targets.yaml: the ones whose silver has been
 checked end to end. A target is added there when it is ready; the site never shows one that
@@ -11,6 +11,10 @@ published target, so a partial run never drops a target from the site.
   and gold.
 - from silver: silver and gold from the bronze on disk.
 - from gold: gold from the silver on disk.
+
+`--refresh-search` (the weekly run of publish.yml, task D10) asks IRSA's search again instead of
+reusing its cached answer, so new frames and new seasons come in; if IRSA does not answer, the
+last answer is used and the site stays as it was.
 
 Gold is checked with validate_gold() before it replaces the previous one (gold/build.py), so a
 failed run leaves the previous gold and publish.yml does not deploy.
@@ -58,7 +62,8 @@ def warn(message: str) -> None:
     print(f"::warning::{message}", flush=True)
 
 
-def run(target_id: str | None = None, *, start: str = "bronze", root: Path | None = None) -> dict:
+def run(target_id: str | None = None, *, start: str = "bronze", root: Path | None = None,
+        refresh_search: bool = False) -> dict:
     """Run the steps from `start`; return the rows of every gold table.
 
     A target whose bronze or silver fails does not stop the others: it is left out of this
@@ -85,7 +90,7 @@ def run(target_id: str | None = None, *, start: str = "bronze", root: Path | Non
         try:
             if first <= 0:
                 log.info("target=%s: bronze", name)
-                download(name, root=root)
+                download(name, root=root, refresh=refresh_search)
             if first <= 1:
                 log.info("target=%s: silver", name)
                 build_frames(name, root=root)

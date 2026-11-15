@@ -326,6 +326,77 @@ def test_without_a_saved_list_or_cutouts_the_target_fails(tmp_path):
         download("barnard", root=root, frames=_irsa_down, fetch=_fetch_ok)
 
 
+# --- The weekly run asks IRSA again (task D10) --------------------------------------------------
+@pytest.fixture
+def sia_cache(tmp_path, monkeypatch):
+    """The catalog cache in a temporary folder; returns where Barnard's IRSA answer is kept."""
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+
+    from serafim.validation import catalogs
+
+    monkeypatch.setattr(catalogs, "CACHE_DIR", tmp_path / "catalog_cache")
+    config = load_config()
+    barnard = next(t for t in config["targets"] if t["id"] == "barnard")
+    center = SkyCoord(float(barnard["ra_now"]) * u.deg, float(barnard["dec_now"]) * u.deg)
+    return bronze.sia_cache_path(center, collections_for(config["settings"]))
+
+
+def _keep(path: Path, listing: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    listing.to_parquet(path, index=False)
+
+
+def test_sia_cache_path_is_the_file_spherex_frames_writes(sia_cache, monkeypatch):
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+
+    from serafim.validation import targets
+
+    monkeypatch.setattr(targets, "_query_frames", lambda center, collections: BARNARD)
+    config = load_config()
+    barnard = next(t for t in config["targets"] if t["id"] == "barnard")
+    center = SkyCoord(float(barnard["ra_now"]) * u.deg, float(barnard["dec_now"]) * u.deg)
+    targets.spherex_frames(center, collections_for(config["settings"]))
+    assert sia_cache.is_file()  # if AI changes its cache keys, refresh must follow
+
+
+def test_refresh_asks_irsa_again_instead_of_the_cached_answer(tmp_path, sia_cache):
+    root = _config_root(tmp_path)
+    _keep(sia_cache, _listing((1, SEASON_1)))  # last week: only season 1
+    asked = []
+
+    def irsa(center, collections):
+        asked.append(sia_cache.exists())  # spherex_frames() would read it if it were there
+        return BARNARD  # this week: season 2 too
+
+    assert download("barnard", root=root, frames=irsa, fetch=_fetch_ok, refresh=True) == 22
+    assert asked == [False]
+    assert {row["season"] for row in read_manifest(root)} == {1, 2}
+    assert not list(sia_cache.parent.glob("*.previous"))
+
+
+def test_when_the_refreshed_search_fails_the_last_answer_is_used(tmp_path, sia_cache):
+    root = _config_root(tmp_path)
+    _keep(sia_cache, BARNARD)
+    _keep(bronze.frame_list_path("barnard", root), _listing((1, SEASON_1)))  # older than it
+    assert download("barnard", root=root, frames=_irsa_down, fetch=_fetch_ok, refresh=True) == 22
+    assert sia_cache.is_file() and not list(sia_cache.parent.glob("*.previous"))
+    assert {row["season"] for row in read_manifest(root)} == {1, 2}
+
+
+def test_without_refresh_the_cached_answer_is_left_alone(tmp_path, sia_cache):
+    root = _config_root(tmp_path)
+    _keep(sia_cache, BARNARD)
+
+    def cached(center, collections):
+        assert sia_cache.is_file()
+        return BARNARD
+
+    download("barnard", root=root, frames=cached, fetch=_fetch_ok)
+    assert sia_cache.is_file()
+
+
 def test_save_frame_lists_writes_one_file_per_target(tmp_path):
     root = _config_root(tmp_path)
     written = bronze.save_frame_lists("barnard", root=root, frames=_only(BARNARD))
@@ -406,4 +477,5 @@ def test_the_pipeline_refuses_a_target_that_is_not_published():
 
 def test_the_bronze_command_is_in_the_cli():
     args = build_parser().parse_args(["bronze", "--target", "barnard"])
-    assert (args.command, args.target) == ("bronze", "barnard")
+    assert (args.command, args.target, args.refresh_search) == ("bronze", "barnard", False)
+    assert build_parser().parse_args(["bronze", "--refresh-search"]).refresh_search is True

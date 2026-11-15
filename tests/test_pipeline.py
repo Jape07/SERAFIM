@@ -96,6 +96,26 @@ def test_from_bronze_runs_every_step_and_gold_has_every_published_target(calls):
     assert calls == [*steps_per_target, ("gold", published)]
 
 
+def test_refresh_search_reaches_every_download(calls, monkeypatch):
+    asked = []
+    monkeypatch.setattr("serafim.bronze.download.download",
+                        lambda target=None, **kwargs: asked.append(kwargs.get("refresh")))
+    run(refresh_search=True)
+    assert asked == [True] * len(publish_targets(load_config()))
+    asked.clear()
+    run()
+    assert set(asked) == {False}
+
+
+def test_the_run_command_passes_refresh_search(monkeypatch):
+    seen = {}
+    monkeypatch.setattr("serafim.pipeline.run",
+                        lambda *args, **kwargs: seen.update(kwargs) or {"targets.parquet": 5})
+    assert main(["run", "--refresh-search"]) == 0
+    assert seen["refresh_search"] is True
+    assert main(["run"]) == 0 and seen["refresh_search"] is False
+
+
 def test_from_silver_does_not_download(calls):
     run(start="silver")
     steps = [step for step, _ in calls]
@@ -154,6 +174,19 @@ def test_bronze_is_saved_even_when_the_run_fails_or_is_cancelled():
     save = next(s for s in steps("build") if s.get("name") == "Save bronze and the catalog cache")
     assert save["if"].startswith("always()")
     assert "data/bronze" in save["with"]["path"] and "data/catalog_cache" in save["with"]["path"]
+
+
+def test_every_monday_publish_asks_irsa_again_and_deploys():
+    trigger = WORKFLOW.get("on", WORKFLOW.get(True))  # PyYAML reads the key `on` as True
+    assert [entry["cron"] for entry in trigger["schedule"]] == ["0 6 * * 1"]
+    assert trigger["workflow_dispatch"]["inputs"]["refresh"]["default"] is False
+    pipeline = next(s for s in steps("build") if s.get("name") == "Pipeline (bronze, silver, gold)")
+    refresh = pipeline["env"]["REFRESH"]
+    assert "schedule" in refresh and "inputs.refresh" in refresh
+    assert "python -m serafim run --refresh-search" in pipeline["run"]
+    # The weekly run deploys like a push; only a run by hand can switch the deploy off.
+    assert WORKFLOW["jobs"]["deploy"]["if"] == (
+        "github.event_name != 'workflow_dispatch' || inputs.deploy")
 
 
 def test_deploy_needs_a_good_build_and_can_be_switched_off_by_hand():
