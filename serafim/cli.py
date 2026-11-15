@@ -184,11 +184,15 @@ def png(target_id: str | None, gold_dir: Path) -> int:
 def alignment(target_id: str | None) -> int:
     """Measure the sums against Gaia; docs/alignment.md says if they meet the goal."""
     from serafim.silver.alignment import GOAL_PX, run
+    from serafim.validation.catalogs import CatalogUnavailable
 
     try:
         worst = run(target_id)
     except (FileNotFoundError, StopIteration) as error:
         log.error("No sums to measure (%s): run `python -m serafim silver` first.", error)
+        return 1
+    except CatalogUnavailable as error:
+        log.error("No Gaia to measure against (ESA and VizieR did not answer): %s", error)
         return 1
     if worst >= GOAL_PX:
         log.warning("Largest offset %.3f px is over the goal of %.1f px: tell AI.", worst, GOAL_PX)

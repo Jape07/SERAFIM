@@ -276,6 +276,52 @@ def test_the_doc_keeps_the_sections_of_other_targets(tmp_path):
     assert "DOES NOT meet" in text.split("## wise_0855")[0]  # barnard's section now has 0.2 px
 
 
+def write_two_sums(root, shift):
+    """Detector 1, seasons 1 and 2: the same stars, season 2 drawn `shift` px away."""
+    rows = []
+    for season, offset in ((1, (0.0, 0.0)), (2, shift)):
+        image, _ = star_field(shift=offset)
+        image += np.random.default_rng(season).normal(0, 0.2, image.shape)
+        save_npz(sum_path("barnard", 1, season, root), {
+            "image": image.astype(np.float32), "variance": np.full((N, N), 0.04, np.float32),
+            "n_valid": np.full((N, N), 3, np.int16), "mask": np.zeros((N, N), bool),
+            "saturated": np.zeros((N, N), bool), "n_saturated": np.zeros((N, N), np.int16),
+            "mean_mjd": np.float64(61000 + 180 * season), "wcs_json": np.array(wcs_to_json(GRID)),
+        })
+        rows.append({"sum_id": f"barnard_d1_s{season}", "target_id": "barnard", "detector": 1,
+                     "season": season, "mean_date_utc": pd.Timestamp("2026-01-01", tz="UTC"),
+                     "n_frames": 3, "background_noise": 0.2, "flags": "", "saturated": False,
+                     "png": contract.sum_png("barnard", 1, season)})
+    sums_table_path(root).parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(to_contract_table(pd.DataFrame(rows), contract.SUMS), sums_table_path(root))
+
+
+def test_a_shift_between_seasons_is_measured_without_a_catalog(root):
+    from serafim.silver.alignment import measure_between_seasons
+
+    write_two_sums(root, (0.3, -0.2))
+    table = measure_between_seasons("barnard", root=root)
+    row = table.iloc[0]
+    assert (row.detector, row.season) == (1, "1-2") and row.n_stars >= 20
+    assert row.dx_px == pytest.approx(0.3, abs=0.05)
+    assert row.dy_px == pytest.approx(-0.2, abs=0.05)
+
+
+def test_without_gaia_the_doc_says_it_measured_between_seasons(root, monkeypatch):
+    from serafim.silver import alignment
+    from serafim.validation.catalogs import CatalogUnavailable
+
+    def no_gaia(*args, **kwargs):
+        raise CatalogUnavailable("gaia did not answer")
+
+    write_two_sums(root, (0.0, 0.0))
+    monkeypatch.setattr(alignment, "measure_alignment", no_gaia)
+    worst = alignment.run("barnard", root=root)
+    text = (root / alignment.DOC_PATH).read_text(encoding="utf-8")
+    assert "Gaia did not answer" in text and "| 1 | 1-2 |" in text
+    assert worst < 0.05
+
+
 def test_the_alignment_command_is_in_the_cli():
     args = build_parser().parse_args(["alignment", "--target", "barnard"])
     assert (args.command, args.target) == ("alignment", "barnard")
