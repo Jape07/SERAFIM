@@ -44,6 +44,7 @@ def calls(monkeypatch):
     monkeypatch.setattr("serafim.silver.sums.build_sums", record("sums"))
     monkeypatch.setattr("serafim.silver.differences.build_differences", record("differences"))
     monkeypatch.setattr("serafim.gold.build.build_gold", record("gold"))
+    monkeypatch.setattr("serafim.validation.discoveries.main", lambda argv: 0)
     # Every published target has silver sums, unless a test says otherwise.
     monkeypatch.setattr("serafim.pipeline.targets_with_sums",
                         lambda root: set(publish_targets(load_config())))
@@ -94,6 +95,29 @@ def test_from_bronze_runs_every_step_and_gold_has_every_published_target(calls):
     steps_per_target = [(step, name) for name in published
                         for step in ("bronze", "frames", "sums", "differences")]
     assert calls == [*steps_per_target, ("gold", published)]
+
+
+def test_discoveries_are_rewritten_after_gold(calls, monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr("serafim.validation.discoveries.main",
+                        lambda argv: seen.append((calls[-1], argv)) or 0)
+    (tmp_path / "config").mkdir()
+    config = ROOT / "config" / "targets.yaml"
+    (tmp_path / "config" / "targets.yaml").write_bytes(config.read_bytes())
+    run(start="gold", root=tmp_path)
+    (last_step, argv) = seen[0]
+    assert last_step[0] == "gold"  # after gold is in place
+    assert argv == ["--gold", str(tmp_path / "data" / "gold"),
+                    "--out", str(tmp_path / "web" / "texts" / "discoveries.json")]
+
+
+def test_a_failure_in_discoveries_does_not_stop_the_publish(calls, monkeypatch, capsys):
+    def broken(argv):
+        raise RuntimeError("no silver sums on disk")
+
+    monkeypatch.setattr("serafim.validation.discoveries.main", broken)
+    assert run(start="gold") == {"targets.parquet": 1}
+    assert "discoveries.json kept as it was" in capsys.readouterr().out
 
 
 def test_from_silver_does_not_download(calls):
