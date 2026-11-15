@@ -11,9 +11,11 @@ from __future__ import annotations
 import torch
 from torch import nn
 
+from serafim.ai.stamps import CHANNELS
+
 
 class DipoleCNN(nn.Module):
-    def __init__(self, base: int = 16, dropout: float = 0.3, channels: int = 3):
+    def __init__(self, base: int = 16, dropout: float = 0.3, channels: int = len(CHANNELS)):
         super().__init__()
         layers, width = [], channels
         for out in (base, 2 * base, 4 * base):
@@ -32,6 +34,18 @@ class DipoleCNN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.head(self.features(x)).squeeze(1)
+
+
+class Ensemble(nn.Module):
+    """The mean logit of several networks trained with different seeds: steadier p_dipole than
+    any one of them, exported as one ONNX model."""
+
+    def __init__(self, members: list[nn.Module]):
+        super().__init__()
+        self.members = nn.ModuleList(members)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.stack([member(x) for member in self.members]).mean(0)
 
 
 def parameters(model: nn.Module) -> int:

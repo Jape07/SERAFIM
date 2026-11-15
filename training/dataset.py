@@ -6,9 +6,9 @@ For every silver difference (one detector, seasons a and b) its two season sums 
 3 x 32 x 32 stamps are cut with serafim/ai/stamps.py (the functions the pipeline uses):
 
 - dipole (label 1): a point source injected into sum A at p and into sum B at p + shift, with the
-  PSF of that detector (a Gaussian of the EPSF width widened by silver's resampling, as in task
-  A5, plus 10 % of the light in wide wings). Shift 0.3 to 3 px in any direction; peak S/N in the
-  difference log-uniform from 3 to 300; its brightness may change by up to 15 %.
+  PSF of that detector measured on the real sums (training/psf.py: core, resampling and near
+  wings; version 1 used a Gaussian, 25-30 % too narrow in detectors 4-6). Shift 0.3 to 3 px in any
+  direction; peak S/N in the difference log-uniform from 3 to 300; brightness may change by 15 %.
 - saturated_dipole (label 1): the same with a source bright enough to saturate: its core is
   masked (0 in the stamp) and only the wings show, like Barnard's Star.
 - Negatives (label 0), hard ones included:
@@ -21,12 +21,17 @@ For every silver difference (one detector, seasons a and b) its two season sums 
     left, task A9 stage 1);
   - saturated_still: a saturated source that does not move but changes brightness (up to 4
     times) or PSF width (10 %, another wavelength);
-  - saturated_core: the center of a real saturated target that does not move.
+  - saturated_core: the center of a real saturated target that does not move;
+  - bright_star: a real catalog star of the field that saturates and does not move (version 2:
+    version 1 failed exactly there, so every such star of every difference is used).
 - Every random place keeps away from the edge, from masked or saturated pixels, and from the real
   movers (any catalog source that moves between a and b, and the moving targets).
 
 Real stamps, only for the test (real.npz): every moving target at its catalog midpoint in every
 difference (label 1 if it moved 0.3 px or more), and the saturated targets that do not move.
+
+The decision of the classic rule is stored with every stamp (`rule`; for the real ones also
+`stage1`, the full rule of the pipeline), so the comparison needs no silver (training/rule.py).
 
 The split is by target (training/train.py), never at random: neighbor stamps overlap.
 """
@@ -53,8 +58,10 @@ GOLD_DIR = targets.ROOT / "data" / "gold"
 SEED = 0
 PER_DIFFERENCE = {"dipole": 32, "saturated_dipole": 8, "background": 15, "star": 15,
                   "brightness": 5, "pixel_pair": 5, "saturated_still": 8}  # fmt: skip
-WING_FRACTION = 0.1
+BRIGHT_STAR_MAX = 8  # real saturated stars that do not move, per difference
+WING_FRACTION = 0.1  # the fallback PSF (a detector without a measured one)
 WING_SIGMA_PX = 2.5
+PSFS: dict = {}  # detector -> training.psf.Psf, filled by build()
 SATURATED_SNR = (300.0, 5000.0)  # peak S/N of a source bright enough to saturate
 CORE_LEVEL = (0.005, 0.2)  # of the peak: the saturated core is where the profile is above it
 PSF_CHANGE = 0.1  # a star seen at another wavelength: up to 10 % wider or narrower
@@ -77,14 +84,26 @@ def psf_sigma(detector: int) -> float:
                           trajectory.RESAMPLING_SIGMA_PX))  # fmt: skip
 
 
-def point(shape: tuple[int, int], x: float, y: float, sigma: float) -> np.ndarray:
-    """A point source of total flux 1 at pixel (x, y): a Gaussian core and WING_FRACTION of the
-    light in a wide Gaussian, like the wings of the archive EPSF (what a saturated star shows)."""
+def point(shape: tuple[int, int], x: float, y: float, detector: int, scale: float = 1.0):
+    """A point source of total flux 1 at pixel (x, y): the PSF measured for `detector`
+    (training/psf.py), `scale` times wider. Without one, a Gaussian core with WING_FRACTION of the
+    light in wide wings."""
     rows, cols = np.indices(shape)
+    if detector in PSFS:
+        cx, cy = x + (cols - x) / scale, y + (rows - y) / scale
+        return PSFS[detector].at(cx, cy, x, y) / scale**2
+    sigma = psf_sigma(detector) * scale
     r2 = (cols - x) ** 2 + (rows - y) ** 2
     core = np.exp(-r2 / (2 * sigma**2)) / (2 * np.pi * sigma**2)
     wing = np.exp(-r2 / (2 * WING_SIGMA_PX**2)) / (2 * np.pi * WING_SIGMA_PX**2)
     return (1 - WING_FRACTION) * core + WING_FRACTION * wing
+
+
+def peak(detector: int) -> float:
+    """The central pixel of a source of flux 1, so a peak S/N becomes a flux."""
+    if detector in PSFS:
+        return float(PSFS[detector].grid.max())
+    return float(point((9, 9), 4.0, 4.0, detector).max())
 
 
 def saturate(bad: np.ndarray, *profiles: np.ndarray, level: float) -> np.ndarray:
@@ -135,13 +154,13 @@ def difference_stamps(
     rng,
     saturated_center: tuple | None = None,
 ) -> tuple:
-    """(stamps (N, 3, 32, 32), labels table) for one difference."""  # fmt: skip
+    """(stamps (N, 4, 32, 32), labels table) for one difference."""  # fmt: skip
     image_a = np.asarray(sum_a["image"], float)
     image_b = np.asarray(sum_b["image"], float)
     bad = stamps.unusable(sum_a) | stamps.unusable(sum_b)
     base = stamps.cube(image_a, image_b, bad)
-    sigma = psf_sigma(detector)
     noise_d = noise(image_b - image_a, bad)
+    per_flux = noise_d / peak(detector)  # a peak S/N of 1 in the difference
     shape = image_a.shape
     out, rows = [], []
 
@@ -153,10 +172,10 @@ def difference_stamps(
         shift, angle = rng.uniform(*SHIFT_PX), rng.uniform(0, 2 * np.pi)
         dx, dy = shift * np.cos(angle), shift * np.sin(angle)
         snr = log_uniform(rng, *SNR)
-        flux = snr * noise_d * 2 * np.pi * sigma**2
-        a = image_a + flux * point(shape, x, y, sigma)
+        flux = snr * per_flux
+        a = image_a + flux * point(shape, x, y, detector)
         b = image_b + flux * rng.uniform(1 - BRIGHTNESS_JITTER, 1 + BRIGHTNESS_JITTER) * point(
-            shape, x + dx, y + dy, sigma
+            shape, x + dx, y + dy, detector
         )
         cx = x + dx / 2 + rng.uniform(-CENTER_JITTER_PX, CENTER_JITTER_PX)
         cy = y + dy / 2 + rng.uniform(-CENTER_JITTER_PX, CENTER_JITTER_PX)
@@ -166,12 +185,12 @@ def difference_stamps(
         shift, angle = rng.uniform(*SHIFT_PX), rng.uniform(0, 2 * np.pi)
         dx, dy = shift * np.cos(angle), shift * np.sin(angle)
         snr = log_uniform(rng, *SATURATED_SNR)
-        flux = snr * noise_d * 2 * np.pi * sigma**2
-        star_a = flux * point(shape, x, y, sigma)
+        flux = snr * per_flux
+        star_a = flux * point(shape, x, y, detector)
         star_b = (
             flux
             * rng.uniform(1 - BRIGHTNESS_JITTER, 1 + BRIGHTNESS_JITTER)
-            * point(shape, x + dx, y + dy, sigma)
+            * point(shape, x + dx, y + dy, detector)
         )
         level = star_a.max() * log_uniform(rng, *CORE_LEVEL)
         cut_bad = saturate(bad, star_a, star_b, level=level)
@@ -182,11 +201,11 @@ def difference_stamps(
 
     for x, y in free_places(bad, avoid, rng, PER_DIFFERENCE["saturated_still"]):
         snr = log_uniform(rng, *SATURATED_SNR)
-        flux = snr * noise_d * 2 * np.pi * sigma**2
+        flux = snr * per_flux
         change = rng.uniform(1.0, BRIGHTNESS_CHANGE[1]) ** rng.choice([-1, 1])
-        width = sigma * rng.uniform(1 - PSF_CHANGE, 1 + PSF_CHANGE)
-        star_a = flux * point(shape, x, y, sigma)
-        star_b = flux * change * point(shape, x, y, width)
+        width = rng.uniform(1 - PSF_CHANGE, 1 + PSF_CHANGE)
+        star_a = flux * point(shape, x, y, detector)
+        star_b = flux * change * point(shape, x, y, detector, width)
         level = star_a.max() * log_uniform(rng, *CORE_LEVEL)
         cube = stamps.cube(image_a + star_a, image_b + star_b,
                            saturate(bad, star_a, star_b, level=level))  # fmt: skip
@@ -215,9 +234,9 @@ def difference_stamps(
 
     for x, y in free_places(bad, avoid, rng, PER_DIFFERENCE["brightness"]):
         snr = log_uniform(rng, *SNR)
-        flux = snr * noise_d * 2 * np.pi * sigma**2
+        flux = snr * per_flux
         change = rng.uniform(*BRIGHTNESS_CHANGE) ** rng.choice([-1, 1])
-        star = point(shape, x, y, sigma)
+        star = point(shape, x, y, detector)
         add(stamps.cut(stamps.cube(image_a + flux * star, image_b + flux * change * star, bad),
                        x, y), "brightness", 0, x, y, snr)  # fmt: skip
 
@@ -230,13 +249,33 @@ def difference_stamps(
         a[iy + step[1], ix + step[0]] += value
         add(stamps.cut(stamps.cube(a, b, bad), ix, iy), "pixel_pair", 0, ix, iy)
 
+    saturated = ndimage.binary_dilation(
+        (np.asarray(sum_a.get("n_saturated", 0)) > 0)
+        | (np.asarray(sum_b.get("n_saturated", 0)) > 0),
+        iterations=2,
+    )
+    still = sources[sources["moved_px"] < dipoles.MOVING_PX]
+    glare = [(x, y) for x, y in zip(still["xa"], still["ya"], strict=True)
+             if stamps.HALF <= x < nx - stamps.HALF - 1 and stamps.HALF <= y < ny - stamps.HALF - 1
+             and saturated[int(round(y)), int(round(x))]
+             and all(np.hypot(x - ax, y - ay) >= MOVER_PX for ax, ay in avoid)]  # fmt: skip
+    unique = []
+    for x, y in glare:  # one stamp per star, even if several catalogs list it
+        if all(np.hypot(x - ux, y - uy) > 2.0 for ux, uy in unique):
+            unique.append((x, y))
+    for x, y in unique[:BRIGHT_STAR_MAX]:
+        jx, jy = rng.uniform(-CENTER_JITTER_PX, CENTER_JITTER_PX, 2)
+        add(stamps.cut(base, x + jx, y + jy), "bright_star", 0, x + jx, y + jy)
+
     if saturated_center is not None:
         for _ in range(SATURATED_CORES):
             jx, jy = rng.uniform(-2, 2, 2)
             x, y = saturated_center[0] + jx, saturated_center[1] + jy
             add(stamps.cut(base, x, y), "saturated_core", 0, x, y)
 
-    return np.array(out, np.float32).reshape(-1, 3, stamps.STAMP, stamps.STAMP), pd.DataFrame(rows)
+    channels = len(stamps.CHANNELS)
+    out = np.array(out, np.float32).reshape(-1, channels, stamps.STAMP, stamps.STAMP)
+    return out, pd.DataFrame(rows)
 
 
 # --- Every difference ---------------------------------------------------------------------------
@@ -254,8 +293,12 @@ def build(root: Path | None = None, gold_dir: Path = GOLD_DIR, seed: int = SEED)
     """(stamps, labels, real stamps, real labels) for every difference in silver."""
     from serafim.silver.store import load_sum
     from serafim.validation import verification
+    from training import psf
 
     rng = np.random.default_rng(seed)
+    PSFS.clear()
+    PSFS.update(psf.build_psfs(root, gold_dir))
+    psf.save(PSFS)
     document = yaml.safe_load(targets.TARGETS_PATH.read_text(encoding="utf-8"))
     by_id = {t["id"]: t for t in document["targets"]}
     tables, _ = verification.read_gold(gold_dir)
@@ -291,8 +334,16 @@ def build(root: Path | None = None, gold_dir: Path = GOLD_DIR, seed: int = SEED)
                                            and shift >= dipoles.MOVING_PX)})  # fmt: skip
         log.info("%s: %d stamps", target_id, sum(len(r) for r in labels if
                                                 (r["target_id"] == target_id).all()))  # fmt: skip
-    return (np.concatenate(parts), pd.concat(labels, ignore_index=True), np.array(real),
-            pd.DataFrame(real_rows))  # fmt: skip
+    from training.rule import rule_says, stage_one
+
+    found = np.concatenate(parts)
+    labels = pd.concat(labels, ignore_index=True)
+    labels["rule"] = [rule_says(stamp) for stamp in found]
+    real = np.array(real)
+    real_rows = pd.DataFrame(real_rows)
+    real_rows["rule"] = [rule_says(stamp) for stamp in real]
+    real_rows["stage1"] = stage_one(real_rows, tables)
+    return found, labels, real, real_rows
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -27,8 +27,9 @@ import pandas as pd
 import torch
 from torch import nn
 
+from serafim.ai.stamps import CHANNELS
 from training.dataset import OUT_DIR
-from training.model import DipoleCNN, parameters
+from training.model import DipoleCNN, Ensemble, parameters
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = ROOT / "models" / "dipole_cnn.onnx"
 EXPERIMENTS = ROOT / "training" / "experiments.csv"
 CONFIG = {"lr": 2e-3, "base": 16, "dropout": 0.3, "batch": 128, "epochs": 15, "seed": 0,
-          "weight_decay": 1e-4}  # fmt: skip
+          "weight_decay": 1e-4, "members": 3}  # fmt: skip
 
 
 def load(folder: Path = OUT_DIR) -> tuple:
@@ -53,6 +54,13 @@ def dihedral(batch: torch.Tensor, generator: torch.Generator) -> torch.Tensor:
     if int(torch.randint(2, (1,), generator=generator)):
         batch = torch.flip(batch, dims=(3,))
     return batch
+
+
+def fit_ensemble(x: np.ndarray, y: np.ndarray, config: dict = CONFIG) -> Ensemble:
+    """config["members"] networks, each with its own seed, averaged."""
+    members = [fit(x, y, {**config, "seed": config["seed"] + i})
+               for i in range(config.get("members", 1))]  # fmt: skip
+    return Ensemble(members).eval()
 
 
 def fit(x: np.ndarray, y: np.ndarray, config: dict = CONFIG) -> DipoleCNN:
@@ -102,7 +110,7 @@ def leave_one_target_out(found, labels, real, real_labels, config: dict = CONFIG
     real_oof = np.full(len(real_labels), np.nan)
     for target_id in sorted(labels["target_id"].unique()):
         held = (labels["target_id"] == target_id).to_numpy()
-        model = fit(found[~held], labels["label"].to_numpy()[~held], config)
+        model = fit_ensemble(found[~held], labels["label"].to_numpy()[~held], config)
         oof[held] = scores(model, found[held])
         mine = (real_labels["target_id"] == target_id).to_numpy()
         if mine.any():
@@ -116,11 +124,12 @@ def export(model: DipoleCNN, path: Path = MODEL_PATH) -> None:
     import onnxruntime
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    example = torch.zeros(2, 3, 32, 32)
+    example = torch.zeros(2, len(CHANNELS), 32, 32)
     torch.onnx.export(model, example, str(path), input_names=["stamps"], output_names=["logit"],
                       dynamic_axes={"stamps": {0: "n"}, "logit": {0: "n"}}, opset_version=17,
                       dynamo=False)  # fmt: skip
-    check = torch.randn(8, 3, 32, 32)
+    model.eval()  # export restores the module's mode, and an Ensemble starts in training mode
+    check = torch.randn(8, len(CHANNELS), 32, 32)
     with torch.no_grad():
         expected = model(check).numpy()
     session = onnxruntime.InferenceSession(str(path), providers=["CPUExecutionProvider"])
@@ -155,6 +164,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m training.train")
     parser.add_argument("--epochs", type=int, default=CONFIG["epochs"])
     parser.add_argument("--no-export", action="store_true", help="Only the out-of-fold run.")
+    parser.add_argument(
+        "--export-only",
+        action="store_true",
+        help="Only the final model (the out-of-fold run is already on disk).",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     torch.set_num_threads(max(1, torch.get_num_threads()))
@@ -164,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
     log.info("%d stamps (%d dipoles), %d real; model with %d parameters", len(labels),
              int(labels["label"].sum()), len(real_labels),
              parameters(DipoleCNN(config["base"], config["dropout"])))  # fmt: skip
+    if args.export_only:
+        export(fit_ensemble(found, labels["label"].to_numpy(), config))
+        return 0
     oof, real_oof = leave_one_target_out(found, labels, real, real_labels, config)
     labels.assign(p_dipole=oof).to_parquet(OUT_DIR / "oof.parquet", index=False)
     real_labels.assign(p_dipole=real_oof).to_parquet(OUT_DIR / "real_oof.parquet", index=False)
@@ -171,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     log.info("leave-one-target-out AUC: %.4f", value)
     record(config, value, "leave-one-target-out AUC on injected dipoles and hard negatives")
     if not args.no_export:
-        export(fit(found, labels["label"].to_numpy(), config))
+        export(fit_ensemble(found, labels["label"].to_numpy(), config))
     return 0
 
 

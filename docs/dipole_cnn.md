@@ -8,41 +8,41 @@ A, sum B and their difference, `serafim/ai/stamps.py`).
 
 | Acceptance criterion | Needed | Got | |
 | --- | --- | --- | --- |
-| Out-of-fold ROC AUC on injected stamps | >= 0.9 | 0.910 | ✅ |
-| Finds more injected dipoles than the rule at the same false alarms | sensitivity above the rule's | 62% vs 26% | ✅ |
-| Calibration on injected stamps (ECE) | <= 0.05 | 0.022 | ✅ |
-| Real: ROC AUC, movers against still saturated stars | >= 0.8 | 0.52 | ❌ |
-| Real: still saturated stars called a dipole | <= 10% | 9/38 = 24% (95 % CI 13%-39%) | ❌ |
-| Real: balanced accuracy not below the stage-1 rule's | at least the rule's | 0.60 vs 0.73 | ❌ |
+| Out-of-fold ROC AUC on injected stamps | >= 0.9 | 0.911 | ✅ |
+| Finds more injected dipoles than the rule at the same false alarms | sensitivity above the rule's | 58% vs 25% | ✅ |
+| Calibration on injected stamps (ECE) | <= 0.05 | 0.034 | ✅ |
+| Real: ROC AUC, movers against still saturated stars | >= 0.8 | 0.45 | ❌ |
+| Real: still saturated stars called a dipole | <= 10% | 6/38 = 16% (95 % CI 7%-30%) | ❌ |
+| Real: balanced accuracy not below the stage-1 rule's | at least the rule's | 0.53 vs 0.73 | ❌ |
 
 **Experimental.** The pipeline keeps the stage-1 rule and its catalog check for every status. The CNN's p_dipole is shown only next to dipoles without saturated pixels (its domain: there it ranks the real Epsilon Indi B above real fixed stars and finds it more often than the rule), as an extra opinion that never changes a status. On saturated stars it does not tell one that moves from one that does not, and the real test has only three moving objects.
 
 ## Confusion matrix and its metrics
 
-Injected: 8346 stamps out of fold (injected dipoles and hard negatives; the fixed stars and the sky are real). CNN at p_dipole ≥ 0.731, the threshold with the rule's false-alarm rate (2.0%); the threshold that maximizes informedness would be 0.379, with 86.3% specificity: too many false alarms for something as rare as a moving source. Real: 49 differences where a target moved ≥ 0.3 px (Barnard's Star, Epsilon Indi B, WISE 0855) and 38 of saturated stars that do not move (RW Aurigae, R Draconis). The stage-1 rule is the one the pipeline uses (whole image, halo lobes, catalog check).
+Injected: 8906 stamps out of fold (injected dipoles and hard negatives; the fixed stars and the sky are real). CNN at p_dipole ≥ 0.792, the threshold with the rule's false-alarm rate (2.0%); the threshold that maximizes informedness would be 0.333, with 83.9% specificity: too many false alarms for something as rare as a moving source. Real: 49 differences where a target moved ≥ 0.3 px (Barnard's Star, Epsilon Indi B, WISE 0855) and 38 of saturated stars that do not move (RW Aurigae, R Draconis). The stage-1 rule is the one the pipeline uses (whole image, halo lobes, catalog check).
 
 | Metric | Injected: CNN | Injected: rule | Real: CNN | Real: stage-1 rule |
 | --- | --- | --- | --- | --- |
-| TP / FN / FP / TN | 2302 / 1418 / 94 / 4532 | 977 / 2743 / 94 / 4532 | 21 / 28 / 9 / 29 | 23 / 26 / 0 / 38 |
-| Prevalence (share of dipoles in the test) | 0.446 | 0.446 | 0.563 | 0.563 |
-| Sensitivity (recall, TPR) | 0.619 | 0.263 | 0.429 | 0.469 |
-| Specificity (TNR) | 0.980 | 0.980 | 0.763 | 1.000 |
-| Balanced accuracy | 0.799 | 0.621 | 0.596 | 0.735 |
-| Informedness (Youden's J) | 0.598 | 0.242 | 0.192 | 0.469 |
-| ROC AUC | 0.910 | — | 0.521 | — |
-| Precision (PPV) | 0.961 | 0.912 | 0.700 | 1.000 |
-| NPV | 0.762 | 0.623 | 0.509 | 0.594 |
-| Accuracy | 0.819 | 0.660 | 0.575 | 0.701 |
-| MCC | 0.658 | 0.360 | 0.200 | 0.528 |
-| Markedness | 0.722 | 0.535 | 0.209 | 0.594 |
-| F1 | 0.753 | 0.408 | 0.532 | 0.639 |
-| Jaccard | 0.604 | 0.256 | 0.362 | 0.469 |
-| Fowlkes-Mallows | 0.771 | 0.489 | 0.548 | 0.685 |
-| Average precision (PR AUC) | 0.915 | — | 0.673 | — |
-| Prevalence threshold | 0.153 | 0.218 | 0.426 | 0.000 |
-| Precision if 10.0% of the places hold a dipole | 0.772 | 0.590 | 0.167 | 1.000 |
-| Precision if 1.0% of the places hold a dipole | 0.235 | 0.115 | 0.018 | 1.000 |
-| Precision if 0.1% of the places hold a dipole | 0.030 | 0.013 | 0.002 | 1.000 |
+| TP / FN / FP / TN | 2140 / 1580 / 106 / 5080 | 940 / 2780 / 106 / 5080 | 11 / 38 / 6 / 32 | 23 / 26 / 0 / 38 |
+| Prevalence (share of dipoles in the test) | 0.418 | 0.418 | 0.563 | 0.563 |
+| Sensitivity (recall, TPR) | 0.575 | 0.253 | 0.224 | 0.469 |
+| Specificity (TNR) | 0.980 | 0.980 | 0.842 | 1.000 |
+| Balanced accuracy | 0.777 | 0.616 | 0.533 | 0.735 |
+| Informedness (Youden's J) | 0.555 | 0.232 | 0.067 | 0.469 |
+| ROC AUC | 0.911 | — | 0.454 | — |
+| Precision (PPV) | 0.953 | 0.899 | 0.647 | 1.000 |
+| NPV | 0.763 | 0.646 | 0.457 | 0.594 |
+| Accuracy | 0.811 | 0.676 | 0.494 | 0.701 |
+| MCC | 0.630 | 0.356 | 0.083 | 0.528 |
+| Markedness | 0.716 | 0.545 | 0.104 | 0.594 |
+| F1 | 0.717 | 0.394 | 0.333 | 0.639 |
+| Jaccard | 0.559 | 0.246 | 0.200 | 0.469 |
+| Fowlkes-Mallows | 0.740 | 0.477 | 0.381 | 0.685 |
+| Average precision (PR AUC) | 0.904 | — | 0.615 | — |
+| Prevalence threshold | 0.159 | 0.221 | 0.456 | 0.000 |
+| Precision if 10.0% of the places hold a dipole | 0.758 | 0.579 | 0.136 | 1.000 |
+| Precision if 1.0% of the places hold a dipole | 0.221 | 0.111 | 0.014 | 1.000 |
+| Precision if 0.1% of the places hold a dipole | 0.027 | 0.012 | 0.001 | 1.000 |
 
 Precision depends on how common dipoles are; the test sets have about half. In a real
 difference a mover is one place in thousands, so neither the CNN nor the rule can scan
@@ -53,13 +53,13 @@ The stage-1 rule's 1.000 come from 0 false alarms in 38 stamps of only two still
 
 ## Its domain: sources that are not saturated
 
-Real movers against the 2762 real fixed-star and sky stamps of the fields left out (the CNN calls 1.0% of those a dipole):
+Real movers against the 2762 real fixed-star and sky stamps of the fields left out (the CNN calls 0.5% of those a dipole):
 
 | Mover | Differences | ROC AUC against fixed stars and sky | CNN finds | Stage-1 rule finds |
 | --- | --- | --- | --- | --- |
-| barnard | 18 | 0.982 | 9 | 15 |
-| eps_indi_b | 15 | 0.874 | 12 | 8 |
-| wise_0855 | 16 | 0.384 | 0 | 0 |
+| barnard | 18 | 0.930 | 0 | 15 |
+| eps_indi_b | 15 | 0.854 | 11 | 8 |
+| wise_0855 | 16 | 0.272 | 0 | 0 |
 
 Epsilon Indi B (not saturated) is the case the CNN is for. Barnard's Star is saturated:
 the rule's halo logic finds it more often. WISE 0855 (S/N 5–7 in one season) stays below
@@ -67,23 +67,23 @@ what either can see.
 
 ## Injected dipoles: by S/N, by shift, saturated
 
-At the same false-alarm rate: sensitivity 26% (rule) against 62% (CNN); at peak S/N under 10, 1% against 20%; saturated movers (core masked) 1% against 37%.
+At the same false-alarm rate: sensitivity 25% (rule) against 58% (CNN); at peak S/N under 10, 1% against 11%; saturated movers (core masked) 1% against 34%.
 
 | Peak S/N (not saturated) | Stamps | Rule | CNN |
 | --- | --- | --- | --- |
-| 3–5 | 347 | 1% | 7% |
-| 5–10 | 451 | 0% | 31% |
-| 10–30 | 698 | 18% | 71% |
-| 30–100 | 809 | 53% | 91% |
-| 100–300 | 671 | 60% | 94% |
+| 3–5 | 347 | 1% | 2% |
+| 5–10 | 421 | 0% | 19% |
+| 10–30 | 716 | 16% | 63% |
+| 30–100 | 782 | 51% | 86% |
+| 100–300 | 710 | 60% | 95% |
 
 | Shift (px) | Stamps | Rule | CNN |
 | --- | --- | --- | --- |
-| 0.3–0.7 | 437 | 27% | 40% |
-| 0.7–1 | 316 | 36% | 59% |
-| 1–1.5 | 565 | 44% | 68% |
-| 1.5–2 | 559 | 50% | 75% |
-| 2–3 | 1099 | 19% | 78% |
+| 0.3–0.7 | 447 | 21% | 34% |
+| 0.7–1 | 330 | 31% | 52% |
+| 1–1.5 | 589 | 43% | 66% |
+| 1.5–2 | 529 | 51% | 72% |
+| 2–3 | 1081 | 21% | 74% |
 
 ![Rule and CNN at the same false-alarm rate](img/dipole_cnn.png)
 
@@ -91,12 +91,13 @@ At the same false-alarm rate: sensitivity 26% (rule) against 62% (CNN); at peak 
 
 | Negative | Stamps | Rule | CNN |
 | --- | --- | --- | --- |
-| background | 1395 | 0.4% | 0.9% |
-| brightness | 465 | 1.5% | 2.8% |
-| pixel_pair | 465 | 8.6% | 0.9% |
-| saturated_core | 190 | 0.5% | 22.1% |
-| saturated_still | 744 | 0.5% | 0.9% |
-| star | 1367 | 2.6% | 1.2% |
+| background | 1395 | 0.5% | 0.6% |
+| bright_star | 560 | 2.7% | 1.8% |
+| brightness | 465 | 0.4% | 2.8% |
+| pixel_pair | 465 | 7.7% | 0.4% |
+| saturated_core | 190 | 0.5% | 17.4% |
+| saturated_still | 744 | 0.7% | 4.7% |
+| star | 1367 | 2.9% | 0.4% |
 
 ## Enough data? The learning curve
 
@@ -121,39 +122,39 @@ From half to all of the data the held-out AUC still rises by +0.081, +0.044: the
 
 | Target left out | ROC AUC | Dipoles found | False alarms |
 | --- | --- | --- | --- |
-| barnard | 0.906 | 58% | 0.9% |
-| eps_indi_b | 0.935 | 70% | 1.5% |
-| r_dra | 0.903 | 58% | 2.1% |
-| rw_aur | 0.886 | 63% | 4.8% |
-| wise_0855 | 0.916 | 58% | 0.4% |
-| mean ± sd | 0.909 ± 0.018 | | |
+| barnard | 0.900 | 56% | 0.6% |
+| eps_indi_b | 0.920 | 61% | 3.2% |
+| r_dra | 0.892 | 57% | 4.8% |
+| rw_aur | 0.917 | 56% | 0.7% |
+| wise_0855 | 0.932 | 57% | 0.2% |
+| mean ± sd | 0.912 ± 0.016 | | |
 
 ## Calibration: does p_dipole = 0.8 mean 8 in 10?
 
-On the injected stamps, expected calibration error 0.022. (Not measured on the real
+On the injected stamps, expected calibration error 0.034. (Not measured on the real
 stamps: too few.)
 
 | p_dipole | Mean p | Share that are dipoles | Stamps |
 | --- | --- | --- | --- |
-| 0.0–0.1 | 0.08 | 0.05 | 833 |
-| 0.1–0.2 | 0.15 | 0.11 | 2245 |
-| 0.2–0.3 | 0.24 | 0.24 | 1097 |
-| 0.3–0.4 | 0.34 | 0.37 | 650 |
-| 0.4–0.5 | 0.44 | 0.47 | 414 |
-| 0.5–0.6 | 0.55 | 0.56 | 303 |
-| 0.6–0.7 | 0.65 | 0.65 | 319 |
-| 0.7–0.8 | 0.75 | 0.77 | 280 |
-| 0.8–0.9 | 0.85 | 0.87 | 334 |
-| 0.9–1.0 | 0.98 | 0.99 | 1871 |
+| 0.0–0.1 | 0.08 | 0.05 | 1241 |
+| 0.1–0.2 | 0.14 | 0.10 | 2576 |
+| 0.2–0.3 | 0.25 | 0.28 | 985 |
+| 0.3–0.4 | 0.35 | 0.40 | 530 |
+| 0.4–0.5 | 0.45 | 0.49 | 397 |
+| 0.5–0.6 | 0.55 | 0.58 | 338 |
+| 0.6–0.7 | 0.65 | 0.62 | 286 |
+| 0.7–0.8 | 0.75 | 0.70 | 334 |
+| 0.8–0.9 | 0.85 | 0.81 | 403 |
+| 0.9–1.0 | 0.98 | 0.99 | 1816 |
 
 ## Each real target
 
 | Target | Differences used | CNN says dipole | Stage-1 rule keeps a dipole | Median p_dipole |
 | --- | --- | --- | --- | --- |
-| barnard | 18 | 9 | 15 | 0.74 |
-| eps_indi_b | 15 | 12 | 8 | 0.96 |
-| r_dra | 20 | 4 | 0 | 0.65 |
-| rw_aur | 18 | 5 | 0 | 0.39 |
-| wise_0855 | 16 | 0 | 0 | 0.14 |
+| barnard | 18 | 0 | 15 | 0.37 |
+| eps_indi_b | 15 | 11 | 8 | 0.95 |
+| r_dra | 20 | 6 | 0 | 0.72 |
+| rw_aur | 18 | 0 | 0 | 0.15 |
+| wise_0855 | 16 | 0 | 0 | 0.09 |
 
-Few independent objects (3 movers, 2 still stars), so the intervals are wide: the CNN finds 21/49 real movers (95 % CI 30%-57%), the stage-1 rule 23 (34%-61%).
+Few independent objects (3 movers, 2 still stars), so the intervals are wide: the CNN finds 11/49 real movers (95 % CI 13%-36%), the stage-1 rule 23 (34%-61%).

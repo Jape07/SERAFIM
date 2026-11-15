@@ -1,3 +1,4 @@
 date_utc,commit,name,lr,base_filters,dropout,batch_size,epochs,seed,val_auc,notes
 2026-11-15T10:42:54Z,bec0d9d,dipole_cnn,0.002,16,0.3,128,15,0,0.9417,leave-one-target-out AUC on injected dipoles and hard negatives
 2026-11-15T10:50:38Z,bec0d9d,dipole_cnn,0.002,16,0.3,128,15,0,0.9098,leave-one-target-out AUC on injected dipoles and hard negatives
+2026-11-15T12:07:00Z,2ebf164,dipole_cnn,0.002,16,0.3,128,15,0,0.9106,leave-one-target-out AUC on injected dipoles and hard negatives

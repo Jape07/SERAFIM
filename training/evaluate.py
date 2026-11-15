@@ -37,6 +37,7 @@ from training.metrics import (
     roc_auc,
     youden_threshold,
 )
+from training.rule import rule_says, stage_one
 from training.train import load
 
 log = logging.getLogger(__name__)
@@ -45,12 +46,10 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "docs" / "dipole_cnn.md"
 SUMMARY_PATH = ROOT / "docs" / "dipole_cnn.json"  # read by serafim/validation/dipoles.py
 IMAGE_PATH = ROOT / "docs" / "img" / "dipole_cnn.png"
-RULE_CENTER_PX = 4.0
 MIN_SHIFT_PX = 0.3
 SNR_BINS = [3, 5, 10, 30, 100, 300]
 SHIFT_BINS = [0.3, 0.7, 1.0, 1.5, 2.0, 3.0]
 PREVALENCES = (0.1, 0.01, 0.001)
-EMPTY = np.zeros((32, 32), bool)
 # What a professional deliverable needs before the CNN may change anything in the pipeline
 MIN_AUC = 0.9
 MAX_ECE = 0.05
@@ -58,39 +57,9 @@ MIN_REAL_AUC = 0.8
 MAX_REAL_FALSE_ALARM = 0.1
 
 
-def rule_says(stamp: np.ndarray) -> bool:
-    """The stage-1 rule on one stamp: a dipole near the center."""
-    sigma = np.sinh(np.asarray(stamp[2], float))  # back from asinh to sigma units
-    found = dipoles.find_dipoles(sigma, EMPTY, EMPTY)
-    if found.empty:
-        return False
-    cx = (found["x_from"] + found["x_to"]) / 2 - 16
-    cy = (found["y_from"] + found["y_to"]) / 2 - 16
-    return bool((np.hypot(cx, cy) <= RULE_CENTER_PX).any())
-
-
 def matched_threshold(p_negative: np.ndarray, false_alarm: float) -> float:
     """The CNN threshold with the rule's false-alarm rate on the negatives."""
     return float(np.quantile(p_negative, 1 - false_alarm)) if false_alarm > 0 else 1.0
-
-
-def stage_one(real_table: pd.DataFrame) -> pd.Series:
-    """Whether the full stage-1 rule (whole difference, catalog check) keeps a dipole at the
-    target in each real difference (needs gold and silver on disk)."""
-    from serafim.validation import verification
-
-    tables, _ = verification.read_gold(dipoles.GOLD_DIR)
-    out = pd.Series(False, index=real_table.index)
-    for target_id, part in real_table.groupby("target_id"):
-        layers = tables["catalogs"][tables["catalogs"]["target_id"] == target_id]
-        rows = dipoles.target_dipoles(target_id, layers)
-        if rows.empty:
-            continue
-        kept = rows[dipoles.at_target(rows) & (rows["status"] != dipoles.DISCARDED)]
-        cells = {(r.detector, r.season_a, r.season_b) for r in kept.itertuples()}
-        for r in part.itertuples():
-            out[r.Index] = (r.detector, r.season_a, r.season_b) in cells
-    return out
 
 
 def real_set(real_table: pd.DataFrame) -> pd.DataFrame:
@@ -220,9 +189,14 @@ def main() -> int:
     found, _, real, _ = load()
     table = pd.read_parquet(OUT_DIR / "oof.parquet")
     real_table = pd.read_parquet(OUT_DIR / "real_oof.parquet")
-    table["rule"] = [rule_says(s) for s in found]
-    real_table["rule"] = [rule_says(s) for s in real]
-    real_table["stage1"] = stage_one(real_table)
+    if "rule" not in table:  # a dataset from before the rule was stored with the stamps
+        table["rule"] = [rule_says(s) for s in found]
+    if "rule" not in real_table:
+        real_table["rule"] = [rule_says(s) for s in real]
+    if "stage1" not in real_table:
+        from serafim.validation import verification
+
+        real_table["stage1"] = stage_one(real_table, verification.read_gold(dipoles.GOLD_DIR)[0])
     real_eval = real_set(real_table)
 
     # --- Injected stamps -------------------------------------------------------------------

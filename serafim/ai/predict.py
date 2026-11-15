@@ -21,7 +21,11 @@ MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "dipole_cnn.onnx"
 
 
 def available(model_path: Path = MODEL_PATH) -> bool:
-    return Path(model_path).is_file()
+    """The model exists and takes the stamps of this version (len(CHANNELS) channels)."""
+    if not Path(model_path).is_file():
+        return False
+    shape = _session(str(model_path)).get_inputs()[0].shape
+    return len(shape) == 4 and shape[1] == len(CHANNELS)
 
 
 @cache
