@@ -1,4 +1,4 @@
-"""Guide texts for the 5 challenge targets (task A3, AI & validation).
+"""Guide texts for the 5 challenge targets (tasks A3 and A7, AI & validation).
 
 `python -m serafim.validation.guides` writes web/texts/targets.json from
 config/targets.yaml, so every number in the texts comes from the same queries
@@ -12,7 +12,9 @@ The file has, in plain words for anyone:
 - detectors, modes and layers: what each choice in the viewer shows.
 - flags: what each SPHEREx pixel flag means and what the sums do with it.
 
-These are drafts: task A7 rewrites them once the real SPHEREx images are checked.
+Final texts (task A7): every claim was checked against the real gold images
+(docs/verification.md, task A6), and the measured numbers come from the AI documents
+(docs/light_curves.json, docs/trajectory.json, docs/verification.json).
 The site is in English, so the texts are too.
 """
 
@@ -26,6 +28,7 @@ from pathlib import Path
 
 import yaml
 
+from serafim.silver.frames import MASKED_FLAGS
 from serafim.validation import targets
 
 log = logging.getLogger(__name__)
@@ -49,6 +52,19 @@ PERIOD_SOURCE = "SIMBAD mesVar, Gaia DR3 long-period variables (2022yCat.1358)"
 # Barnard's Star: its motion measured on the ring matches the catalog to 0.1 px in D5-D6,
 # where its saturated center is smallest.
 SEEN_DETECTORS = {"wise_0855": (6,), "barnard": (5, 6)}
+
+# A field star to compare a target with, where the stretch of each detector makes brightness hard
+# to judge by itself (each detector has its own color scale). Measured in task A7: flux in 2.5 px
+# around each, background from a ring, on the all-seasons silver sums. Epsilon Indi B against the
+# star 11 px east and 15 px north (22h04m31.5s -56d46m29s): the pair matches it in detector 4,
+# where methane absorbs, and is ~5 times brighter in detector 5.
+COMPARISON_STAR = {
+    "eps_indi_b": {
+        "where": "up and to the left",
+        "offset_px": [-11, 15],
+        "pair_over_star": {3: 0.60, 4: 1.03, 5: 4.92, 6: 3.37},
+    }
+}
 
 # Brightness change of the saturated targets, measured on the light around their saturated
 # core (python -m serafim.validation.light_curves -> docs/light_curves.json). Barnard's Star,
@@ -94,8 +110,9 @@ MODES = (
     ("sum", "One season",
      "The frames of one season in one detector, added together so faint things show up."),
     ("difference", "Difference",
-     "A later season minus an earlier one. What did not change disappears. A star that moved "
-     "leaves a dark spot where it was and a bright spot where it went."),
+     "A later season minus an earlier one. What did not change fades to white. Red is "
+     "brighter in the later season, blue in the earlier one: a star that moved leaves blue "
+     "where it was and red where it went. Saturated pixels are white."),
     ("all_seasons", "All seasons",
      "Every season added together: the deepest image, but anything that moves looks "
      "stretched."),
@@ -120,44 +137,39 @@ LAYERS = (
 # SPHEREx FLAGS bits (MSKN* keys, docs/real_fits.md) and what the sums do with them
 LEFT_OUT = "left out"
 KEPT = "kept"
-UNDECIDED = "decided in task D4"
 FLAGS = (
     (0, "TRANSIENT", "Something hit or changed this pixel during the exposure, such as a "
-     "cosmic ray.", UNDECIDED),
+     "cosmic ray."),
     (1, "OVERFLOW", "The pixel got more light than it can count: it is saturated and its value "
-     "is not real. The site paints it with the brightest color.", LEFT_OUT),
+     "is not real. The site paints it with the brightest color."),
     (2, "SUR_ERROR", "The camera could not measure a clean brightness for this pixel during the "
-     "exposure.", UNDECIDED),
-    (6, "NONFUNC", "A pixel that does not work.", LEFT_OUT),
+     "exposure."),
+    (6, "NONFUNC", "A pixel that does not work."),
     (7, "DICHROIC", "Possible stray light from the part of the telescope that splits the light "
-     "between detectors.", UNDECIDED),
-    (9, "MISSING_DATA", "There is no data for this pixel.", LEFT_OUT),
-    (10, "HOT", "A pixel that reads too high even without light.", LEFT_OUT),
-    (11, "COLD", "A pixel that is less sensitive than the others.", LEFT_OUT),
+     "between detectors."),
+    (9, "MISSING_DATA", "There is no data for this pixel."),
+    (10, "HOT", "A pixel that reads too high even without light."),
+    (11, "COLD", "A pixel that is less sensitive than the others."),
     (12, "FULLSAMPLE", "A processing note about how this pixel was read. Not a problem by "
-     "itself.", UNDECIDED),
+     "itself."),
     (14, "PHANMISS", "A correction for an electronic echo of bright stars could not be applied "
-     "here.", UNDECIDED),
+     "here."),
     (15, "NONLINEAR", "The pixel was nearly full, so its brightness is not reliable. Treated "
-     "like a saturated pixel.", LEFT_OUT),
-    (17, "PERSIST", "Afterglow: a bright source seen earlier may leave a faint trace here.",
-     UNDECIDED),
-    (19, "OUTLIER", "This value disagrees strongly with the other readings of the same spot.",
-     UNDECIDED),
+     "like a saturated pixel."),
+    (17, "PERSIST", "Afterglow: a bright source seen earlier may leave a faint trace here."),
+    (19, "OUTLIER", "This value disagrees strongly with the other readings of the same spot."),
     (20, "CROSSTALK", "A bright star elsewhere on the detector leaks a faint electronic copy "
-     "here.", UNDECIDED),
-    (21, "SOURCE", "A star or galaxy covers this pixel. This is normal and never hidden.", KEPT),
-    (22, "GHOST", "A faint reflection of a bright star inside the telescope may fall here.",
-     UNDECIDED),
+     "here."),
+    (21, "SOURCE", "A star or galaxy covers this pixel. This is normal and never hidden."),
+    (22, "GHOST", "A faint reflection of a bright star inside the telescope may fall here."),
     (23, "GHOST_FPA", "A reflection between the detectors and the telescope optics may fall "
-     "here.", UNDECIDED),
-    (24, "GHOST_EXT", "A reflection of a bright star outside the image may fall here.",
-     UNDECIDED),
-    (25, "STREAK", "A streak crosses this pixel, for example from a satellite.", UNDECIDED),
+     "here."),
+    (24, "GHOST_EXT", "A reflection of a bright star outside the image may fall here."),
+    (25, "STREAK", "A streak crosses this pixel, for example from a satellite."),
     (26, "BLOOM", "Charge spilled over from a saturated neighbor. It is still light from that "
-     "bright star.", KEPT),
-    (27, "SNOWBALL", "A round splash left by a particle hitting the detector.", UNDECIDED),
-    (28, "HALO", "Inside the glow around a very bright star.", KEPT),
+     "bright star."),
+    (27, "SNOWBALL", "A round splash left by a particle hitting the detector."),
+    (28, "HALO", "Inside the glow around a very bright star."),
 )  # fmt: skip
 
 SATURATED_BADGE = (
@@ -180,12 +192,12 @@ COMPASS = (
 def build(document: dict) -> dict:
     """The whole guides file from the parsed config/targets.yaml."""
     return {
-        "draft": True,
-        "note": "Draft texts (task A3). Task A7 rewrites them after checking the real SPHEREx "
-        "images.",
+        "draft": False,
+        "note": "Final texts (task A7), checked against the real SPHEREx images of the gold "
+        "(docs/verification.md).",
         "generated_from": f"config/targets.yaml, now_utc {document['now_utc']}",
         "saturated_badge": SATURATED_BADGE,
-        "targets": [guide(target) for target in document["targets"]],
+        "targets": [guide(target, document.get("settings")) for target in document["targets"]],
         "detectors": [
             {"detector": number, "from_um": low, "to_um": high, "text": text}
             for number, low, high, text in DETECTORS
@@ -193,16 +205,24 @@ def build(document: dict) -> dict:
         "modes": [{"id": key, "name": name, "text": text} for key, name, text in MODES],
         "layers": [{"id": key, "name": name, "text": text} for key, name, text in LAYERS],
         "flags": [
-            {"bit": bit, "name": name, "text": text, "in_sums": effect}
-            for bit, name, text, effect in FLAGS
+            {
+                "bit": bit,
+                "name": name,
+                "text": text,
+                "in_sums": LEFT_OUT if name in MASKED_FLAGS else KEPT,
+            }
+            for bit, name, text in FLAGS
         ],
         "sources": {"period_days": PERIOD_SOURCE},
     }
 
 
-def guide(target: dict) -> dict:
+def guide(target: dict, settings: dict | None = None) -> dict:
     """The guide of one target. Every number comes from `target` (or PERIOD_DAYS)."""
     facts = target_facts(target)
+    per_cell = (settings or {}).get("max_frames_per_season_detector")
+    if per_cell:
+        facts["frames_per_detector_and_season"] = per_cell
     writer = WRITERS[target["id"]]
     texts = writer(target, facts)
     return {
@@ -338,8 +358,7 @@ def _barnard(target: dict, facts: dict) -> dict:
             f"Between {_month(target['seasons'][0]['start_utc'])} and "
             f"{_month(target['seasons'][-1]['end_utc'])} it moved about "
             f"{facts['shift_pixels_first_to_last_season']:.1f} pixels {compass} ({where}). "
-            "In the difference image it leaves a dark spot where it was and a bright spot "
-            "where it went."
+            "In the difference image it leaves blue where it was and red where it went."
         ),
         "detectors": list(SEEN_DETECTORS["barnard"]),
         "mode": "difference",
@@ -358,6 +377,8 @@ def _barnard(target: dict, facts: dict) -> dict:
 
 def _eps_indi_b(target: dict, facts: dict) -> dict:
     compass, where = direction(target)
+    star = COMPARISON_STAR["eps_indi_b"]
+    facts["comparison_star"] = star
     return {
         "headline": "Two failed stars with methane in their air",
         "what_it_is": (
@@ -366,14 +387,15 @@ def _eps_indi_b(target: dict, facts: dict) -> dict:
             "too small to burn like the Sun: they glow in the infrared as they slowly cool."
         ),
         "what_to_look_at": (
-            "Compare detector 4 with detector 5. Methane in their air absorbs light inside "
-            "detector 4, so the pair should look dimmer there than in detector 5. That dip "
-            "is the fingerprint of methane in their spectrum."
+            f"Compare the pair with the star {star['where']}. In detector 4 they are "
+            f"{_as_bright(star['pair_over_star'][4])}; in detector 5, "
+            f"{_as_bright(star['pair_over_star'][5])}. Methane in their air absorbs light "
+            "inside detector 4: that dip is its fingerprint."
         ),
         "detectors": [4, 5],
         "mode": "all_seasons",
         "seasons": [0],
-        "how": "Use the image of all seasons and switch between detector 4 and detector 5.",
+        "how": "All seasons added; switch between detectors 4 and 5.",
         "watch_out": [
             "Epsilon Indi A, a much brighter star, is in the same field. The brown dwarfs are "
             "the faint dot at the center.",
@@ -398,18 +420,15 @@ def _wise_0855(target: dict, facts: dict) -> dict:
             "light: it only shines in the longest infrared colors."
         ),
         "what_to_look_at": (
-            f"Open detector {best} with every season added: the faint dot at the center, "
-            "right where WISE puts it. It moved about "
+            f"Open detector {best} with every season added and zoom in: the faint dot at the "
+            "center, barely above the noise, sits where WISE puts it. It moved about "
             f"{facts['shift_pixels_first_to_last_season']:.1f} pixels {compass} ({where}) over "
-            "the year, a shift too small to follow season by season."
+            "the year, too little to follow season by season."
         ),
         "detectors": list(SEEN_DETECTORS["wise_0855"]),
         "mode": "all_seasons",
         "seasons": [0, *with_best],
-        "how": (
-            f"Detector {best} only: in detector 5 it is too faint for these images, and it "
-            "does not show in detectors 1 to 4."
-        ),
+        "how": (f"Detector {best} only: in 5 it is too faint, and in 1 to 4 it does not show."),
         "watch_out": [
             f"A background star sits next to its path: {pixels[first['season']]:.1f} pixels "
             f"away in {_month(first['mean_utc'])}, {pixels[last['season']]:.1f} in "
@@ -505,6 +524,30 @@ def _rw_aur(target: dict, facts: dict) -> dict:
     best = least_saturated(target)
     rows = light_curve(target["id"])
     measured = f" {_change_text(rows)}" if rows else ""
+    change = strongest_change(rows) if rows else None
+    if change:  # the difference shows the change as a red (brighter) or blue (fainter) ring
+        detector, season = int(change["detector"]), int(change["season"])
+        ring = "red" if change["ratio"] > 1 else "blue"
+        look = {
+            "detectors": [detector],
+            "mode": "difference",
+            "seasons": [1, season],
+            "how": (
+                f"Detector {detector}, difference of season {season} minus season 1: the {ring} "
+                "ring around its white center is the light it gained."
+                if ring == "red"
+                else f"Detector {detector}, difference of season {season} minus season 1: the "
+                "blue ring around its white center is the light it lost."
+            ),
+        }
+    else:
+        look = {
+            "detectors": best,
+            "mode": "sum",
+            "seasons": list(range(1, facts["seasons"] + 1)),
+            "how": f"{_detectors(best).capitalize()} (it saturates the least), one season at a "
+            "time.",
+        }
     return {
         "headline": "A young star that dims without warning",
         "what_it_is": (
@@ -512,17 +555,13 @@ def _rw_aur(target: dict, facts: dict) -> dict:
             "Clumps of that dust sometimes pass in front of it and dim it for weeks or months."
         ),
         "what_to_look_at": (
-            "It does not move. Keep the same detector and step through the "
-            f"{facts['seasons']} seasons: its brightness can change from one season to the "
-            f"next.{measured}"
+            "It does not move, so a difference should erase it. It does not: its brightness "
+            f"changes.{measured}"
         ),
-        "detectors": best,
-        "mode": "sum",
-        "seasons": list(range(1, facts["seasons"] + 1)),
-        "how": f"{_detectors(best).capitalize()} (it saturates the least), one season at a time.",
+        **look,
         "watch_out": [
             _saturated_text(target),
-            "Compare the size of its glow rather than its center: a brighter star looks bigger.",
+            "In single seasons, compare its glow, not its center: a brighter star looks bigger.",
         ],
     }
 
@@ -544,6 +583,24 @@ def _r_dra(target: dict, facts: dict) -> dict:
         )
     else:
         measured = f" {_change_text(rows)}" if rows else ""
+    change = strongest_change(rows) if rows else None
+    if change:  # the detector and seasons where the glow changes most
+        first = next(r for r in rows if r["detector"] == change["detector"] and r["season"] == 1)
+        detector, season = int(change["detector"]), int(change["season"])
+        dimmer = change["ratio"] < 1
+        how = (
+            f"Detector {detector}, one season at a time: its glow is "
+            f"{'bigger' if dimmer else 'smaller'} in season 1 ({_month(first['mean_date_utc'])}) "
+            f"than in season {season} ({_month(change['mean_date_utc'])})."
+        )
+        shown = [detector]
+    else:
+        how, shown = "Any detector, one season at a time.", sorted(detectors_seen(target))
+    per_cell = facts.get("frames_per_detector_and_season")
+    frames = (
+        f"SPHEREx passes over it more than over the others ({facts['frames']} frames)"
+        + (f"; this site adds up to {per_cell} per detector and season." if per_cell else ".")
+    )  # fmt: skip
     return {
         "headline": f"A giant star that swells and fades every {months:.0f} months",
         "what_it_is": (
@@ -552,20 +609,14 @@ def _r_dra(target: dict, facts: dict) -> dict:
             "called Mira variables."
         ),
         "what_to_look_at": (
-            f"Keep one detector and step through the {facts['seasons']} seasons. They fall at "
-            "different points of its cycle, so it should look brighter in some seasons than in "
-            f"others.{measured}"
+            f"Its {facts['seasons']} seasons fall at different points of its cycle, so it looks "
+            f"brighter in some than in others.{measured}"
         ),
-        "detectors": sorted(detectors_seen(target)),
+        "detectors": shown,
         "mode": "sum",
         "seasons": list(range(1, facts["seasons"] + 1)),
-        "how": "Any detector, one season at a time.",
-        "watch_out": [
-            _saturated_text(target),
-            *glow,
-            f"It sits near the spot SPHEREx passes over most often, so it has {facts['frames']} "
-            "frames, far more than the others.",
-        ],
+        "how": how,
+        "watch_out": [_saturated_text(target), *glow, frames],
     }
 
 
@@ -593,6 +644,15 @@ def saturation_claims(target: dict) -> tuple[list[int], list[int]]:
     always = [row["detector"] for row in rows if row["saturated"] == row["checked"]]
     sometimes = [row["detector"] for row in rows if 0 < row["saturated"] < row["checked"]]
     return always, sometimes
+
+
+def _as_bright(ratio: float) -> str:
+    """'about as bright as it', 'about 5 times brighter' or 'about 2 times fainter'."""
+    if 0.8 <= ratio <= 1.25:
+        return "about as bright as it"
+    if ratio > 1:
+        return f"about {ratio:.0f} times brighter"
+    return f"about {1 / ratio:.0f} times fainter"
 
 
 def _saturated_text(target: dict) -> str:

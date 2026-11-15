@@ -1,6 +1,6 @@
 {
-  "draft": true,
-  "note": "Draft texts (task A3). Task A7 rewrites them after checking the real SPHEREx images.",
+  "draft": false,
+  "note": "Final texts (task A7), checked against the real SPHEREx images of the gold (docs/verification.md).",
   "generated_from": "config/targets.yaml, now_utc 2026-11-14",
   "saturated_badge": "Saturated center: the camera got more light than it can count, so the brightest pixels are painted with the top color. Look at the edge of the star instead.",
   "targets": [
@@ -10,7 +10,7 @@
       "kind": "motion",
       "headline": "The fastest-moving star in our sky",
       "what_it_is": "A small red star only 6 light-years away, one of the Sun's closest neighbors. It crosses the sky faster than any other star: in about 170 years it moves the width of the full Moon.",
-      "what_to_look_at": "Between August 2025 and September 2026 it moved about 1.7 pixels north (up). In the difference image it leaves a dark spot where it was and a bright spot where it went.",
+      "what_to_look_at": "Between August 2025 and September 2026 it moved about 1.7 pixels north (up). In the difference image it leaves blue where it was and red where it went.",
       "how_to_look": {
         "detectors": [
           5,
@@ -50,7 +50,8 @@
         "seen_in_detectors": [
           5,
           6
-        ]
+        ],
+        "frames_per_detector_and_season": 12
       }
     },
     {
@@ -59,7 +60,7 @@
       "kind": "spectrum",
       "headline": "Two failed stars with methane in their air",
       "what_it_is": "Two brown dwarfs orbiting each other, and together orbiting the star Epsilon Indi A, 12 light-years away. Brown dwarfs are too small to burn like the Sun: they glow in the infrared as they slowly cool.",
-      "what_to_look_at": "Compare detector 4 with detector 5. Methane in their air absorbs light inside detector 4, so the pair should look dimmer there than in detector 5. That dip is the fingerprint of methane in their spectrum.",
+      "what_to_look_at": "Compare the pair with the star up and to the left. In detector 4 they are about as bright as it; in detector 5, about 5 times brighter. Methane in their air absorbs light inside detector 4: that dip is its fingerprint.",
       "how_to_look": {
         "detectors": [
           4,
@@ -69,7 +70,7 @@
         "seasons": [
           0
         ],
-        "text": "Use the image of all seasons and switch between detector 4 and detector 5."
+        "text": "All seasons added; switch between detectors 4 and 5."
       },
       "watch_out": [
         "Epsilon Indi A, a much brighter star, is in the same field. The brown dwarfs are the faint dot at the center.",
@@ -87,7 +88,21 @@
         "motion_arcsec_per_year": 4.684,
         "shift_pixels_first_to_last_season": 1.06,
         "measured_motion_arcsec_per_year": 4.563,
-        "measured_motion_error_arcsec_per_year": 0.277
+        "measured_motion_error_arcsec_per_year": 0.277,
+        "frames_per_detector_and_season": 12,
+        "comparison_star": {
+          "where": "up and to the left",
+          "offset_px": [
+            -11,
+            15
+          ],
+          "pair_over_star": {
+            "3": 0.6,
+            "4": 1.03,
+            "5": 4.92,
+            "6": 3.37
+          }
+        }
       }
     },
     {
@@ -96,7 +111,7 @@
       "kind": "motion",
       "headline": "The coldest brown dwarf known",
       "what_it_is": "A brown dwarf only 7 light-years away, colder than any other found so far. It is so cold that it gives off almost no visible light: it only shines in the longest infrared colors.",
-      "what_to_look_at": "Open detector 6 with every season added: the faint dot at the center, right where WISE puts it. It moved about 1.3 pixels west (to the right) over the year, a shift too small to follow season by season.",
+      "what_to_look_at": "Open detector 6 with every season added and zoom in: the faint dot at the center, barely above the noise, sits where WISE puts it. It moved about 1.3 pixels west (to the right) over the year, too little to follow season by season.",
       "how_to_look": {
         "detectors": [
           6
@@ -107,7 +122,7 @@
           2,
           3
         ],
-        "text": "Detector 6 only: in detector 5 it is too faint for these images, and it does not show in detectors 1 to 4."
+        "text": "Detector 6 only: in 5 it is too faint, and in 1 to 4 it does not show."
       },
       "watch_out": [
         "A background star sits next to its path: 1.9 pixels away in May 2025, 0.8 in May 2026. In detectors 1 to 4, the dot at the center is that star, not WISE 0855.",
@@ -137,7 +152,8 @@
             "2": 1.27,
             "3": 0.75
           }
-        }
+        },
+        "frames_per_detector_and_season": 12
       }
     },
     {
@@ -146,22 +162,21 @@
       "kind": "brightness",
       "headline": "A young star that dims without warning",
       "what_it_is": "A very young star, still surrounded by the disk of gas and dust it formed from. Clumps of that dust sometimes pass in front of it and dim it for weeks or months.",
-      "what_to_look_at": "It does not move. Keep the same detector and step through the 3 seasons: its brightness can change from one season to the next. Measured: in detector 1 it was 1.5 times as bright in September 2026 as in September 2025.",
+      "what_to_look_at": "It does not move, so a difference should erase it. It does not: its brightness changes. Measured: in detector 1 it was 1.5 times as bright in September 2026 as in September 2025.",
       "how_to_look": {
         "detectors": [
           1
         ],
-        "mode": "sum",
+        "mode": "difference",
         "seasons": [
           1,
-          2,
           3
         ],
-        "text": "Detector 1 (it saturates the least), one season at a time."
+        "text": "Detector 1, difference of season 3 minus season 1: the red ring around its white center is the light it gained."
       },
       "watch_out": [
         "It is so bright that its center is always saturated in detectors 2, 4, 5 and 6, and sometimes in detectors 1 and 3: the camera got more light than it can count. Those pixels are painted with the brightest color.",
-        "Compare the size of its glow rather than its center: a brighter star looks bigger."
+        "In single seasons, compare its glow, not its center: a brighter star looks bigger."
       ],
       "facts": {
         "ra_now": 76.9565886,
@@ -199,7 +214,8 @@
             "2": 0.86,
             "3": 0.74
           }
-        }
+        },
+        "frames_per_detector_and_season": 12
       }
     },
     {
@@ -208,14 +224,9 @@
       "kind": "brightness",
       "headline": "A giant star that swells and fades every 8 months",
       "what_it_is": "An old red giant that pulsates: it grows and shrinks, and its brightness changes a lot, in a cycle of about 247 days. Stars like this are called Mira variables.",
-      "what_to_look_at": "Keep one detector and step through the 4 seasons. They fall at different points of its cycle, so it should look brighter in some seasons than in others. Measured with SPHEREx alone: it brightens and fades every 244 days or so; catalogs say 247.",
+      "what_to_look_at": "Its 4 seasons fall at different points of its cycle, so it looks brighter in some than in others. Measured with SPHEREx alone: it brightens and fades every 244 days or so; catalogs say 247.",
       "how_to_look": {
         "detectors": [
-          1,
-          2,
-          3,
-          4,
-          5,
           6
         ],
         "mode": "sum",
@@ -225,11 +236,11 @@
           3,
           4
         ],
-        "text": "Any detector, one season at a time."
+        "text": "Detector 6, one season at a time: its glow is bigger in season 1 (May 2025) than in season 4 (May 2026)."
       },
       "watch_out": [
         "It is so bright that its center is saturated in every detector: the camera got more light than it can count. Those pixels are painted with the brightest color.",
-        "It sits near the spot SPHEREx passes over most often, so it has 1259 frames, far more than the others."
+        "SPHEREx passes over it more than over the others (1259 frames); this site adds up to 12 per detector and season."
       ],
       "facts": {
         "ra_now": 248.1672204,
@@ -275,7 +286,8 @@
             "4": 0.48
           }
         },
-        "measured_period_days": 243.5
+        "measured_period_days": 243.5,
+        "frames_per_detector_and_season": 12
       }
     }
   ],
@@ -326,7 +338,7 @@
     {
       "id": "difference",
       "name": "Difference",
-      "text": "A later season minus an earlier one. What did not change disappears. A star that moved leaves a dark spot where it was and a bright spot where it went."
+      "text": "A later season minus an earlier one. What did not change fades to white. Red is brighter in the later season, blue in the earlier one: a star that moved leaves blue where it was and red where it went. Saturated pixels are white."
     },
     {
       "id": "all_seasons",
@@ -371,7 +383,7 @@
       "bit": 0,
       "name": "TRANSIENT",
       "text": "Something hit or changed this pixel during the exposure, such as a cosmic ray.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 1,
@@ -383,7 +395,7 @@
       "bit": 2,
       "name": "SUR_ERROR",
       "text": "The camera could not measure a clean brightness for this pixel during the exposure.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 6,
@@ -395,7 +407,7 @@
       "bit": 7,
       "name": "DICHROIC",
       "text": "Possible stray light from the part of the telescope that splits the light between detectors.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 9,
@@ -419,13 +431,13 @@
       "bit": 12,
       "name": "FULLSAMPLE",
       "text": "A processing note about how this pixel was read. Not a problem by itself.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 14,
       "name": "PHANMISS",
       "text": "A correction for an electronic echo of bright stars could not be applied here.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 15,
@@ -437,19 +449,19 @@
       "bit": 17,
       "name": "PERSIST",
       "text": "Afterglow: a bright source seen earlier may leave a faint trace here.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 19,
       "name": "OUTLIER",
       "text": "This value disagrees strongly with the other readings of the same spot.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 20,
       "name": "CROSSTALK",
       "text": "A bright star elsewhere on the detector leaks a faint electronic copy here.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 21,
@@ -461,25 +473,25 @@
       "bit": 22,
       "name": "GHOST",
       "text": "A faint reflection of a bright star inside the telescope may fall here.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 23,
       "name": "GHOST_FPA",
       "text": "A reflection between the detectors and the telescope optics may fall here.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 24,
       "name": "GHOST_EXT",
       "text": "A reflection of a bright star outside the image may fall here.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 25,
       "name": "STREAK",
       "text": "A streak crosses this pixel, for example from a satellite.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 26,
@@ -491,7 +503,7 @@
       "bit": 27,
       "name": "SNOWBALL",
       "text": "A round splash left by a particle hitting the detector.",
-      "in_sums": "decided in task D4"
+      "in_sums": "kept"
     },
     {
       "bit": 28,

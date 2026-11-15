@@ -50,7 +50,7 @@ def test_the_five_targets_in_order():
     assert [guide["kind"] for guide in GUIDES["targets"]] == [
         target["kind"] for target in DOCUMENT["targets"]
     ]
-    assert GUIDES["draft"] is True
+    assert GUIDES["draft"] is False  # task A7: final texts
 
 
 @per_guide
@@ -277,3 +277,64 @@ def test_layers_are_the_catalogs_of_task_a2():
     from serafim.validation import layers
 
     assert [layer["id"] for layer in GUIDES["layers"]] == list(layers.MAG_BANDS)
+
+
+# --- Task A7: the texts say what the real images show ------------------------------------------
+
+
+def test_the_difference_colors_are_the_ones_the_site_paints():
+    """gold/png.py draws differences with RdBu_r: red brighter in the later season, blue in the
+    earlier one, saturated pixels as zero (white)."""
+    from serafim.gold import png
+
+    assert png.DIFFERENCE_CMAP == "RdBu_r"
+    mode = next(m for m in GUIDES["modes"] if m["id"] == "difference")
+    assert "blue where it was and red where it went" in mode["text"]
+    assert "Saturated pixels are white" in mode["text"]
+    assert "blue where it was and red where it went" in BY_ID["barnard"]["what_to_look_at"]
+
+
+def test_flags_say_what_silver_really_does_with_them():
+    """Task D4 masks only MASKED_FLAGS; every other flag is kept in the sums."""
+    from serafim.silver.frames import MASKED_FLAGS
+
+    for flag in GUIDES["flags"]:
+        expected = guides.LEFT_OUT if flag["name"] in MASKED_FLAGS else guides.KEPT
+        assert flag["in_sums"] == expected, flag["name"]
+
+
+def test_epsilon_indi_b_is_compared_with_a_field_star():
+    star = guides.COMPARISON_STAR["eps_indi_b"]
+    text = BY_ID["eps_indi_b"]["what_to_look_at"]
+    assert star["where"] in text
+    assert "detector 4 they are about as bright as it" in text  # 1.03: methane absorbs there
+    assert "detector 5, about 5 times brighter" in text  # 4.92
+    assert BY_ID["eps_indi_b"]["facts"]["comparison_star"]["offset_px"] == [-11, 15]
+
+
+def test_rw_aurigae_opens_the_difference_where_its_change_is_largest():
+    rows = guides.light_curve("rw_aur")
+    if not rows:
+        pytest.skip("no docs/light_curves.json")
+    change = guides.strongest_change(rows)
+    how = BY_ID["rw_aur"]["how_to_look"]
+    assert how["mode"] == "difference"
+    assert how["detectors"] == [change["detector"]]
+    assert how["seasons"] == [1, change["season"]]
+    assert ("red ring" if change["ratio"] > 1 else "blue ring") in how["text"]
+
+
+def test_r_draconis_points_at_the_seasons_where_its_glow_changes_most():
+    rows = guides.light_curve("r_dra")
+    if not rows:
+        pytest.skip("no docs/light_curves.json")
+    change = guides.strongest_change(rows)
+    how = BY_ID["r_dra"]["how_to_look"]
+    assert how["detectors"] == [change["detector"]]
+    assert f"season {change['season']}" in how["text"]
+    assert "up to 12 per detector and season" in BY_ID["r_dra"]["watch_out"][-1]
+
+
+def test_wise_0855_says_how_faint_it_is():
+    assert "zoom in" in BY_ID["wise_0855"]["what_to_look_at"]
+    assert "barely above the noise" in BY_ID["wise_0855"]["what_to_look_at"]
