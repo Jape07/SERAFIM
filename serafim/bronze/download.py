@@ -25,6 +25,11 @@ For each target in config/targets.yaml:
 A file already on disk is not downloaded again, so a second run downloads nothing. The
 manifest is rebuilt from the IRSA list every run (seasons can move when new frames arrive)
 and only lists files that exist.
+
+When IRSA's search (SIA) does not answer, the frame list saved in
+config/spherex_frames/<target>.parquet is used instead (`python -m serafim bronze
+--save-frame-lists` writes them; the file service usually still answers). Without a saved list,
+bronze goes on with the cutouts already on disk; with nothing at all, that target fails.
 """
 
 from __future__ import annotations
@@ -45,11 +50,12 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 from serafim.config import ROOT, load_config
-from serafim.validation.targets import spherex_frames, split_seasons
+from serafim.validation.targets import FRAME_COLUMNS, spherex_frames, split_seasons
 
 log = logging.getLogger("serafim.bronze")
 
 MAX_PARALLEL = 8  # never more than 8 downloads at once: be nice to IRSA
+FRAME_LISTS_DIR = Path("config") / "spherex_frames"  # saved frame lists, committed
 DEFAULT_CAP = 12
 DEFAULT_SIZE_DEG = 0.25
 RETRY_STEP_S = 5  # waits 5, 10, 15 s: IRSA answers 502/503 now and then
@@ -211,6 +217,66 @@ def download(
     return downloaded
 
 
+def frame_list_path(target_id: str, root: Path | None = None) -> Path:
+    """The saved list of SPHEREx frames of a target, used when IRSA's search does not answer."""
+    return (root or ROOT) / FRAME_LISTS_DIR / f"{target_id}.parquet"
+
+
+def save_frame_lists(target_id: str | None = None, *, root: Path | None = None,
+                     frames=None) -> list[Path]:
+    """Write config/spherex_frames/<target>.parquet from the IRSA search (or its cache).
+
+    Commit them: when IRSA's search (SIA) is down, bronze downloads from these lists, because
+    the file service (IBE) usually still answers. Run it again when SIA answers to refresh them.
+    """
+    root = root or ROOT
+    config = load_config(root / "config" / "targets.yaml")
+    settings = config.get("settings") or {}
+    find = frames or spherex_frames
+    written = []
+    for target in _targets(config, target_id):
+        center = SkyCoord(float(target["ra_now"]) * u.deg, float(target["dec_now"]) * u.deg)
+        try:
+            listing = find(center, collections_for(settings))
+        except Exception as error:  # any failure of a remote service
+            log.error("target=%s: no frame list saved, the IRSA search failed: %s", target["id"],
+                      error)
+            continue
+        path = frame_list_path(str(target["id"]), root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        listing[FRAME_COLUMNS].reset_index(drop=True).to_parquet(path, index=False)
+        log.info("target=%s: %d frames saved in %s", target["id"], len(listing), path)
+        written.append(path)
+    return written
+
+
+def _search(target: dict, rows: dict, context: dict) -> pd.DataFrame | None:
+    """The frames of a target from IRSA; if the search fails, from the saved list.
+
+    None means: the search failed, there is no saved list, but cutouts of this target are on
+    disk, so bronze goes on with them. With nothing at all it is an ArchiveError.
+    """
+    root, settings = context["root"], context["settings"]
+    name = str(target["id"])
+    center = SkyCoord(float(target["ra_now"]) * u.deg, float(target["dec_now"]) * u.deg)
+    try:
+        return context["find"](center, collections_for(settings))
+    except Exception as error:  # any failure of a remote service counts as a failed search
+        failure = error
+    saved = frame_list_path(name, root)
+    if saved.is_file():
+        log.warning("target=%s: the IRSA search failed (%s); using the frame list saved in %s",
+                    name, failure, saved.relative_to(root))
+        return pd.read_parquet(saved)
+    on_disk = [row for key, row in rows.items()
+               if key[0] == name and (root / str(row["path"])).is_file()]
+    if on_disk:
+        log.warning("target=%s: the IRSA search failed (%s) and there is no saved frame list; "
+                    "going on with the %d cutouts on disk", name, failure, len(on_disk))
+        return None
+    raise ArchiveError(f"the IRSA search failed and there is no saved frame list: {failure}")
+
+
 def _bronze_target(target: dict, rows: dict, context: dict) -> tuple[int, int]:
     """Bronze for one target. Updates `rows`; returns (new files, files on disk)."""
     root, settings = context["root"], context["settings"]
@@ -218,10 +284,12 @@ def _bronze_target(target: dict, rows: dict, context: dict) -> tuple[int, int]:
     ra, dec = float(target["ra_now"]), float(target["dec_now"])
     size_deg = cutout_size_deg(target, settings)
 
-    try:
-        listing = context["find"](SkyCoord(ra * u.deg, dec * u.deg), collections_for(settings))
-    except Exception as error:  # any failure of a remote service counts as a failed search
-        raise ArchiveError(f"the IRSA search failed: {error}") from error
+    listing = _search(target, rows, context)
+    if listing is None:  # no search and no saved list: keep the cutouts on disk as they are
+        for key in [k for k, row in rows.items() if k[0] == name]:
+            if not (root / str(rows[key]["path"])).is_file():
+                del rows[key]
+        return 0, sum(1 for key in rows if key[0] == name)
     if listing.empty:
         log.warning("target=%s: IRSA lists no SPHEREx frames at RA %.4f, Dec %.4f", name, ra, dec)
         return 0, 0

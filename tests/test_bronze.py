@@ -300,6 +300,41 @@ def test_a_failed_search_does_not_stop_the_other_targets(tmp_path):
     }
 
 
+def _irsa_down(center, collections):
+    raise RuntimeError("502 Proxy Error")
+
+
+def test_when_the_search_fails_the_saved_frame_list_is_used(tmp_path):
+    root = _config_root(tmp_path)
+    saved = bronze.frame_list_path("barnard", root)
+    saved.parent.mkdir(parents=True)
+    BARNARD.to_parquet(saved, index=False)
+    assert download("barnard", root=root, frames=_irsa_down, fetch=_fetch_ok) == 22
+    assert {row["season"] for row in read_manifest(root)} == {1, 2}  # same seasons as IRSA's
+
+
+def test_without_a_saved_list_bronze_goes_on_with_the_cutouts_on_disk(tmp_path):
+    root = _config_root(tmp_path)
+    download("barnard", root=root, frames=_only(BARNARD), fetch=_fetch_ok)
+    assert download("barnard", root=root, frames=_irsa_down, fetch=_nothing_to_fetch) == 0
+    assert len(read_manifest(root)) == 22
+
+
+def test_without_a_saved_list_or_cutouts_the_target_fails(tmp_path):
+    root = _config_root(tmp_path)
+    with pytest.raises(ArchiveError, match="barnard"):
+        download("barnard", root=root, frames=_irsa_down, fetch=_fetch_ok)
+
+
+def test_save_frame_lists_writes_one_file_per_target(tmp_path):
+    root = _config_root(tmp_path)
+    written = bronze.save_frame_lists("barnard", root=root, frames=_only(BARNARD))
+    assert written == [bronze.frame_list_path("barnard", root)]
+    table = pq.read_table(written[0]).to_pandas()
+    assert list(table.columns) == FRAME_COLUMNS and len(table) == len(BARNARD)
+    assert bronze.save_frame_lists("barnard", root=root, frames=_irsa_down) == []
+
+
 def test_no_frames_anywhere_is_an_error(tmp_path):
     root = _config_root(tmp_path)
     empty = pd.DataFrame({name: [] for name in FRAME_COLUMNS})
@@ -366,7 +401,7 @@ def test_fetch_cutout_rejects_a_file_without_the_spherex_extensions(tmp_path, mo
 
 
 def test_the_pipeline_refuses_a_target_that_is_not_published():
-    assert main(["run", "--target", "r_dra"]) == 1  # before any download
+    assert main(["run", "--target", "pluto"]) == 1  # before any download
 
 
 def test_the_bronze_command_is_in_the_cli():
