@@ -497,8 +497,8 @@ export function apply(root = document) {
   }
   const themeLabel = document.querySelector("#theme-label");
   if (themeLabel) {
-    const light = document.documentElement.dataset.theme === "light";
-    themeLabel.textContent = light ? t("themeLight") : t("themeDark");
+    const dark = document.documentElement.dataset.theme === "dark";
+    themeLabel.textContent = dark ? t("themeDark") : t("themeLight");
   }
 }
 
