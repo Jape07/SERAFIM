@@ -102,6 +102,10 @@ def test_png_names_are_the_ones_web_builds():
     assert contract.color_png("barnard", 2) == "png/barnard/color_s2.png"
 
 
+def test_frame_id_is_the_target_and_the_obs_id():
+    assert contract.frame_id("barnard", "2025W33_2C_0321_1") == "barnard_2025W33_2C_0321_1"
+
+
 # --- Simulated gold ------------------------------------------------------------
 @pytest.fixture(scope="module")
 def mock_template(tmp_path_factory):
@@ -166,6 +170,9 @@ def test_mock_gold_has_what_the_web_needs(gold):
     )
     assert not in_hole.any()
     assert len(differences) > 0
+
+    # Every frame_id is built the way silver and AI's spectra build it.
+    assert (frames.frame_id == frames.target_id + "_" + frames.obs_id).all()
 
     # Saturated center: both cases, and the flags say why.
     assert sums.saturated.any() and not sums.saturated.all()
@@ -258,6 +265,7 @@ def test_empty_ai_tables_are_valid(gold):
         ("frames.parquet", "flags", "BLOOM,SOURCE", "flags must not include SOURCE"),
         ("frames.parquet", "flags", "bloom, overflow", "flags must be names separated by commas"),
         ("frames.parquet", "frame_id", None, "frame_id has 1 empty values"),
+        ("frames.parquet", "frame_id", "nope", "frame_id must be <target_id>_<obs_id>"),
         ("sums.parquet", "detector", 7, "detector must be 0 to 6"),
         ("sums.parquet", "n_frames", 99, "n_frames does not match"),
         ("sums.parquet", "target_id", "nope", "target_id not found in targets.parquet"),
