@@ -13,10 +13,6 @@
       "what_to_look_at": "Between August 2025 and September 2026 it moved about 1.7 pixels north (up). In the difference image it leaves a dark spot where it was and a bright spot where it went.",
       "how_to_look": {
         "detectors": [
-          1,
-          2,
-          3,
-          4,
           5,
           6
         ],
@@ -25,7 +21,7 @@
           1,
           3
         ],
-        "text": "Any detector. Choose the difference of season 3 minus season 1."
+        "text": "Detector 5 or 6, where its saturated center is smallest. Choose the difference of season 3 minus season 1."
       },
       "watch_out": [
         "It is so bright that its center is saturated in every detector: the camera got more light than it can count. Those pixels are painted with the brightest color.",
@@ -48,7 +44,11 @@
         ],
         "distance_light_years": 5.96,
         "motion_arcsec_per_year": 10.393,
-        "shift_pixels_first_to_last_season": 1.66
+        "shift_pixels_first_to_last_season": 1.66,
+        "seen_in_detectors": [
+          5,
+          6
+        ]
       }
     },
     {
@@ -92,23 +92,23 @@
       "kind": "motion",
       "headline": "The coldest brown dwarf known",
       "what_it_is": "A brown dwarf only 7 light-years away, colder than any other found so far. It is so cold that it gives off almost no visible light: it only shines in the longest infrared colors.",
-      "what_to_look_at": "Choose detector 5 or 6 and the image of all seasons: it should be the faint dot at the center. Then try the difference of the last season minus the first: it moved about 1.3 pixels west (to the right).",
+      "what_to_look_at": "Open detector 6 with every season added: the faint dot at the center, right where WISE puts it. It moved about 1.3 pixels west (to the right) over the year, a shift too small to follow season by season.",
       "how_to_look": {
         "detectors": [
-          5,
-          6
+          6,
+          5
         ],
         "mode": "all_seasons",
         "seasons": [
           0,
-          1,
+          2,
           3
         ],
-        "text": "Detector 5 or 6, image of all seasons first, then the difference."
+        "text": "Detector 6, or 5 with every season added. It does not show in detectors 1 to 4."
       },
       "watch_out": [
-        "It is faint for SPHEREx and may not show in a single season. If it is not there, that is a real result, not a bug.",
-        "The challenge gives its position from about 2010. It has moved since, so this site centers on where it is today."
+        "A background star sits next to its path: 1.9 pixels away in May 2025, 0.8 in May 2026. In detectors 1 to 4, the dot at the center is that star, not WISE 0855.",
+        "The challenge's position is from about 2010; this site centers on where it is today."
       ],
       "facts": {
         "ra_now": 133.757791,
@@ -120,7 +120,20 @@
         "saturated_detectors": [],
         "distance_light_years": 7.43,
         "motion_arcsec_per_year": 8.152,
-        "shift_pixels_first_to_last_season": 1.31
+        "shift_pixels_first_to_last_season": 1.31,
+        "seen_in_detectors": [
+          6,
+          5
+        ],
+        "neighbour_star": {
+          "name": "Gaia DR3 5756956644387831296",
+          "g_mag": 16.31,
+          "pixels_by_season": {
+            "1": 1.92,
+            "2": 1.27,
+            "3": 0.75
+          }
+        }
       }
     },
     {

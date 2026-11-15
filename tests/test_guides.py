@@ -94,8 +94,26 @@ def test_recommended_detectors_have_frames(guide):
     assert set(guide["how_to_look"]["detectors"]) <= seen
 
 
-def test_wise_0855_is_looked_for_in_the_long_infrared():
-    assert BY_ID["wise_0855"]["how_to_look"]["detectors"] == [5, 6]
+def test_wise_0855_opens_where_spherex_sees_it():
+    """The visibility check (docs/visibility.md) sees it in D6, and in D5 with every season."""
+    how = BY_ID["wise_0855"]["how_to_look"]
+    assert how["detectors"] == [6, 5]  # the first one is the one the viewer opens
+    assert how["mode"] == "all_seasons"
+    assert BY_ID["wise_0855"]["facts"]["seen_in_detectors"] == [6, 5]
+
+
+def test_wise_0855_warns_about_the_star_it_passes():
+    """In D1-D4 the dot at its position is a G = 16.3 star, not the brown dwarf."""
+    facts = BY_ID["wise_0855"]["facts"]["neighbour_star"]
+    pixels = {int(season): value for season, value in facts["pixels_by_season"].items()}
+    assert pixels == pytest.approx({1: 1.92, 2: 1.27, 3: 0.75}, abs=0.05)  # it is closing in
+    assert pixels == guides.neighbour_pixels(TARGETS["wise_0855"])
+    warning = " ".join(BY_ID["wise_0855"]["watch_out"])
+    assert "not WISE 0855" in warning and "detectors 1 to 4" in warning
+
+
+def test_barnard_is_shown_where_its_saturated_center_is_smallest():
+    assert BY_ID["barnard"]["how_to_look"]["detectors"] == [5, 6]
 
 
 def test_saturated_targets_say_so():
