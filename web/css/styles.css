@@ -849,20 +849,3 @@ dialog ol { padding-left: 1.1rem; }
 @media (prefers-reduced-motion: reduce) {
   .scan { animation: none; }
 }
-
-/* Moving-object candidates (web/texts/discoveries.json) */
-#candidates { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1.4rem; }
-#candidates .target-block { display: flex; flex-direction: column; gap: 0.65rem; }
-#candidates .target-block h3 { margin: 0; font-size: 1rem; }
-#candidates .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.7rem; }
-#candidates .card, #dipole-detail .card { min-height: 0; gap: 0.4rem; }
-#dipole-detail { margin-top: 0.6rem; }
-.dipole-status { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--ink); }
-.dipole-reason, .dipole-meta, .dipole-ai { margin: 0; font-size: 0.82rem; }
-.dipole-ai a.tag { margin-left: 0.3rem; text-decoration: none; }
-.sky svg .dipole { pointer-events: auto; cursor: pointer; }
-.sky svg .dipole-hit { stroke: transparent; stroke-width: 10; fill: none; }
-.sky svg .dipole-line { stroke: #f5c400; stroke-width: 1.6; fill: none; }
-.sky svg .dipole-head { fill: #f5c400; }
-.sky svg .dipole.selected .dipole-line { stroke: #ffffff; stroke-width: 2.3; }
-.sky svg .dipole.selected .dipole-head { fill: #ffffff; }

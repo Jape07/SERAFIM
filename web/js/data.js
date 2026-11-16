@@ -11,19 +11,9 @@ const FILES = [
   "spectra.parquet",
   "trajectory.parquet",
 ];
-// DuckDB-WASM weighs about 35 MB and comes from a CDN once per visit; on a slow connection
-// that alone can take a couple of minutes. The page says what it is waiting for (see
-// `loading` events) instead of dying early.
-const TIMEOUT_MS = 180000;
-const ENGINE_MB = 35;
+const TIMEOUT_MS = 60000;
 
 let ready;
-
-// Progress for the page: window event "serafim:loading" with detail {stage, mb}.
-// Stages: "engine" (downloading DuckDB), "tables" (the gold Parquet files), "ready".
-function report(stage) {
-  window.dispatchEvent(new CustomEvent("serafim:loading", { detail: { stage, mb: ENGINE_MB } }));
-}
 
 function cell(value) {
   if (typeof value === "bigint") return Number(value);
@@ -44,7 +34,6 @@ async function rows(result) {
 }
 
 async function open() {
-  report("engine");
   const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
   const workerUrl = URL.createObjectURL(
     new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }),
@@ -54,14 +43,12 @@ async function open() {
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
   URL.revokeObjectURL(workerUrl);
   const conn = await db.connect();
-  report("tables");
   for (const name of FILES) {
     const url = new URL(`../gold/${name}`, import.meta.url);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Missing ${name}`);
     await db.registerFileBuffer(name, new Uint8Array(await response.arrayBuffer()));
   }
-  report("ready");
   return conn;
 }
 
@@ -73,7 +60,7 @@ function connection() {
   return Promise.race([
     ready,
     new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`The gold tables took more than ${TIMEOUT_MS / 1000} s to open.`)), TIMEOUT_MS);
+      setTimeout(() => reject(new Error("The gold tables took too long to open.")), TIMEOUT_MS);
     }),
   ]);
 }
