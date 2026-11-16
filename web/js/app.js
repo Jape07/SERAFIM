@@ -1,5 +1,5 @@
-import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=cand1";
+import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=v101";
+import { apply, lang, onChange, t } from "./i18n.js?v=v101";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -2348,6 +2348,14 @@ try {
   put("#updated", info?.run_date_utc
     ? t("tablesLoaded", { date: info.run_date_utc })
     : t("tablesLoaded", { date: "—" }));
+  // A visible version in the footer, so everyone can tell which build they are looking at:
+  // the commit the published gold was built from and its date (gold/meta.json).
+  if (info?.commit) {
+    put("#site-version", t("siteVersion", {
+      commit: String(info.commit).slice(0, 7),
+      date: String(info.run_date_utc || "").slice(0, 16).replace("T", " "),
+    }));
+  }
   if (match) await openRegion(match.target_id, { detector, season: params.get("season"), mode });
   if (selectedDipole && discoveries?.candidates) {
     showDipole(discoveries.candidates.find((row) => row.id === selectedDipole));
