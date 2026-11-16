@@ -76,6 +76,7 @@ Each report is generated; rerun its command after the data change (silver and go
 | `python -m serafim.validation.markers` | [docs/markers.md](docs/markers.md) |
 | `python -m serafim.validation.dipoles` | [docs/dipoles.md](docs/dipoles.md) |
 | `python -m serafim.validation.public` | [docs/mvp_review.md](docs/mvp_review.md): the review of the published site |
+| [docs/handoff.md](docs/handoff.md) | the handoff of AI & validation: state, commands, numbers, what is left |
 | `python -m training.dataset`, `.train`, `.evaluate` | the experimental CNN: [docs/dipole_cnn.md](docs/dipole_cnn.md), [model card](docs/model_card.md) |
 
 ## Repository layout
