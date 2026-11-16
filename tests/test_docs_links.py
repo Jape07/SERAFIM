@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCUMENTS = ["README.md", "docs/demo.md", "docs/model_card.md", "training/RESULTS.md"]
+DOCUMENTS = ["README.md", "docs/demo.md", "docs/model_card.md", "docs/handoff.md",
+             "training/RESULTS.md"]  # fmt: skip
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
