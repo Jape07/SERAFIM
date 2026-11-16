@@ -1,5 +1,5 @@
-import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=w3";
-import { apply, lang, onChange, t } from "./i18n.js?v=gifstory2";
+import { catalogs, differences, frames, meta, spectra, sums, targets, trajectory } from "./data.js?v=v101";
+import { apply, lang, onChange, t } from "./i18n.js?v=v101";
 
 Object.assign(window, { catalogs, differences, frames, meta, spectra, sums, targets, trajectory });
 
@@ -51,7 +51,7 @@ function put(selector, value) {
 }
 
 const MODES = ["sum", "difference", "all_seasons", "blink"];
-const LAYERS = ["gaia", "catwise", "simbad", "skybot"];
+const LAYERS = ["gaia", "catwise", "simbad", "skybot", "candidates"];
 const playButton = document.querySelector("#play");
 const slider = document.querySelector("#slider");
 const discardedBox = document.querySelector("#discarded");
@@ -91,6 +91,10 @@ let diffRows = [];
 let guide = null;
 let layersOn = new Set(LAYERS);
 let selectedSource = null;
+// web/texts/discoveries.json: the motion dipoles of AI & validation (classic rule) with the
+// CNN's second opinion already decided there; the site only shows them.
+let discoveries = null;
+let selectedDipole = "";
 let magReach = 0;
 const catalogCache = new Map();
 const spectrumCache = new Map();
@@ -152,7 +156,14 @@ function pngUrl(row) {
   return new URL(`../gold/${row.png}`, import.meta.url).href;
 }
 
+// The viewer shows the image of the mode: in "difference" that is the season b minus season a
+// PNG, where a moving object leaves its dipole (the challenge asks to subtract images).
 function viewerPicture(frame) {
+  return frame;
+}
+
+// The GIF tells the story with the season sums, so in "difference" it shows the sum of season b.
+function gifPicture(frame) {
   if (mode === "difference") return sumAt(frame.detector, frame.season_b) || frame;
   return frame;
 }
@@ -693,14 +704,7 @@ function fillPanel() {
   if (status) setTag(status, info.label, info.tag);
   put("#panel-name", object.name);
   put("#panel-type", TYPE[object.type] ? t(TYPE[object.type]) : object.type || "—");
-  if (prob) {
-    if (typeof object.p_real === "number") {
-      prob.hidden = false;
-      prob.textContent = `${(object.p_real * 100).toFixed(1)}% p_real`;
-    } else {
-      prob.hidden = true;
-    }
-  }
+  if (prob) prob.hidden = true;
   if (!notes) {
     const shiftOnly = frame && baseline ? movement(object, baseline, frame) : null;
     const moveOnly = shiftOnly == null ? "—" : `${shiftOnly.toFixed(1)}″`;
@@ -1007,7 +1011,7 @@ function skyToPixel(wcs, ra, dec) {
 }
 
 function layerName(id) {
-  const key = { gaia: "layerGaia", catwise: "layerCatwise", simbad: "layerSimbad", skybot: "layerSkybot" }[id];
+  const key = { gaia: "layerGaia", catwise: "layerCatwise", simbad: "layerSimbad", skybot: "layerSkybot", candidates: "layerCandidates" }[id];
   return key ? t(key) : id;
 }
 
@@ -1390,6 +1394,8 @@ function writeUrl(frame) {
   url.searchParams.set("season", seasonToken(frame));
   url.searchParams.set("mode", mode);
   url.searchParams.set("layers", LAYERS.filter((id) => layersOn.has(id)).join(","));
+  if (selectedDipole) url.searchParams.set("dipole", selectedDipole);
+  else url.searchParams.delete("dipole");
   if (searchPoint) {
     url.searchParams.set("ra", String(searchPoint.ra));
     url.searchParams.set("dec", String(searchPoint.dec));
@@ -1402,6 +1408,242 @@ function writeUrl(frame) {
   url.searchParams.delete("region");
   url.searchParams.delete("frame");
   history.replaceState(null, "", url);
+}
+
+// --- Moving-object candidates (web/texts/discoveries.json, from AI & validation) -------------
+// The rule and the CNN run in the pipeline, on the silver sums; the site never runs them. The
+// CNN's opinion (ai_says) is shown as context and only orders the cards: it never changes a
+// status, never hides a candidate and never announces a new object.
+async function loadDiscoveries() {
+  try {
+    const response = await fetch(new URL("../texts/discoveries.json", import.meta.url));
+    if (!response.ok) throw new Error(`Missing discoveries.json (${response.status})`);
+    return await response.json();
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function textHead(sentence) {
+  return String(sentence || "").split(":")[0].trim();
+}
+
+function fieldName(id) {
+  return guide?.targets?.find((item) => item.id === id)?.name
+    || goldTargets.get(id)?.name
+    || TARGETS.find((item) => item.id === id)?.name
+    || id;
+}
+
+function dipoleScore(row) {
+  return row.p_dipole == null || row.p_dipole === "" ? "" : ` (${Number(row.p_dipole).toFixed(2)})`;
+}
+
+function dipoleSentence(row) {
+  const texts = discoveries?.texts || {};
+  if (row.ai_says === "moving") return `${texts.ai_moving || ""}${dipoleScore(row)}`;
+  if (row.ai_says === "not_moving") return `${texts.ai_not_moving || ""}${dipoleScore(row)}`;
+  return texts.ai_none || "";
+}
+
+function sortedDipoles(rows) {
+  // To check first, then Known; within each, the CNN's most confident first, no opinion last.
+  return rows.slice().sort((a, b) => {
+    const rank = (row) => (row.status === "Unidentified candidate" ? 0 : 1);
+    const byStatus = rank(a) - rank(b);
+    if (byStatus) return byStatus;
+    const aMissing = a.p_dipole == null || a.p_dipole === "";
+    const bMissing = b.p_dipole == null || b.p_dipole === "";
+    if (aMissing !== bMissing) return aMissing ? 1 : -1;
+    return Number(b.p_dipole) - Number(a.p_dipole);
+  });
+}
+
+function dipoleCard(row) {
+  const texts = discoveries.texts;
+  const card = document.createElement("article");
+  card.className = row.id === selectedDipole ? "card active" : "card";
+  card.dataset.id = row.id;
+  const status = document.createElement("p");
+  status.className = "dipole-status";
+  status.textContent = row.status === "Known" ? textHead(texts.known) : textHead(texts.unidentified);
+  card.append(status);
+  if (row.status === "Known" && row.reason) {
+    const reason = document.createElement("p");
+    reason.className = "dipole-reason";
+    reason.textContent = row.reason;
+    card.append(reason);
+  }
+  const meta = document.createElement("p");
+  meta.className = "dipole-meta";
+  meta.textContent = `${fieldName(row.target_id)} · ${detectorLabel(Number(row.detector))} · `
+    + t("seasonPair", { b: row.season_b, a: row.season_a }) + ` · S/N ${Number(row.snr).toFixed(0)}`;
+  const opinion = document.createElement("p");
+  opinion.className = "dipole-ai";
+  opinion.append(document.createTextNode(dipoleSentence(row)));
+  if (discoveries.model?.card) {
+    opinion.append(document.createTextNode(" "));
+    const badge = document.createElement("a");
+    badge.className = "tag amber";
+    badge.href = discoveries.model.card;
+    badge.target = "_blank";
+    badge.rel = "noopener";
+    const statusWord = String(discoveries.model.status || "");
+    badge.textContent = statusWord ? statusWord.charAt(0).toUpperCase() + statusWord.slice(1) : "";
+    opinion.append(badge);
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "primary wide";
+  button.textContent = t("showDipole");
+  button.addEventListener("click", () => focusDipole(row));
+  card.append(meta, opinion, button);
+  return card;
+}
+
+function renderDiscoveries() {
+  const title = document.querySelector("#dip-title");
+  const lead = document.querySelector("#dip-lead");
+  const host = document.querySelector("#dip-targets");
+  const foot = document.querySelector("#dip-foot");
+  const dipoleHelp = document.querySelector("#help-dipole");
+  const aiHelp = document.querySelector("#help-ai");
+  if (!title || !lead || !host || !foot) return;
+  if (!discoveries?.texts) {
+    // The rest of the site works without the candidates.
+    title.textContent = t("candidatesTitle");
+    lead.textContent = t("candidatesUnavailable");
+    host.replaceChildren();
+    foot.textContent = "";
+    if (dipoleHelp) dipoleHelp.textContent = t("candidatesUnavailable");
+    if (aiHelp) aiHelp.textContent = "";
+    return;
+  }
+  const texts = discoveries.texts;
+  title.textContent = texts.title || "";
+  lead.textContent = texts.lead || "";
+  foot.textContent = texts.footnote || "";
+  if (dipoleHelp) dipoleHelp.textContent = texts.lead || "";
+  if (aiHelp) aiHelp.textContent = texts.footnote || "";
+  host.replaceChildren();
+  const ids = TARGETS.map((item) => item.id);
+  for (const id of Object.keys(discoveries.counts || {})) {
+    if (!ids.includes(id)) ids.push(id);
+  }
+  const knownWord = textHead(texts.known).toLowerCase();
+  const checkWord = textHead(texts.unidentified).toLowerCase();
+  const discardedWord = textHead(texts.discarded).toLowerCase();
+  for (const id of ids) {
+    const block = document.createElement("section");
+    block.className = "target-block";
+    const heading = document.createElement("h3");
+    heading.textContent = fieldName(id);
+    const counts = discoveries.counts?.[id] || { known: 0, unidentified: 0, discarded: 0 };
+    const line = document.createElement("p");
+    line.className = "hint";
+    line.textContent = `${counts.known} ${knownWord} · ${counts.unidentified} ${checkWord} · ${counts.discarded} ${discardedWord}`;
+    block.append(heading, line);
+    const rows = sortedDipoles((discoveries.candidates || []).filter((row) => row.target_id === id));
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.textContent = texts[`empty_${id}`] || texts.empty_default || "";
+      block.append(empty);
+    } else {
+      const grid = document.createElement("div");
+      grid.className = "cards";
+      for (const row of rows) grid.append(dipoleCard(row));
+      block.append(grid);
+    }
+    host.append(block);
+  }
+}
+
+function showDipole(row) {
+  const host = document.querySelector("#dipole-detail");
+  if (!host) return;
+  host.replaceChildren();
+  if (!row || !discoveries?.texts) return;
+  host.append(dipoleCard(row));
+}
+
+function arrowHead(from, to) {
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const size = 7;
+  const tip = [to.x, to.y];
+  const left = [to.x - size * Math.cos(angle - 0.4), to.y - size * Math.sin(angle - 0.4)];
+  const right = [to.x - size * Math.cos(angle + 0.4), to.y - size * Math.sin(angle + 0.4)];
+  const head = document.createElementNS(SVG, "polygon");
+  head.setAttribute("class", "dipole-head");
+  head.setAttribute("points", [tip, left, right].map((point) => point.join(",")).join(" "));
+  return head;
+}
+
+// An arrow from where the source was (season a) to where it went (season b), only on the
+// difference of that detector and that pair of seasons, where the dipole is.
+function drawDipoles() {
+  for (const node of marks.querySelectorAll(".dipole")) node.remove();
+  if (!layersOn.has("candidates") || mode !== "difference" || !discoveries?.candidates) return;
+  const frame = sequence[index];
+  const placed = goldTargets.get(activeTarget);
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (!frame || !placed?.wcs_json || !width || !height) return;
+  let wcs = placed.wcs_json;
+  if (typeof wcs === "string") wcs = JSON.parse(wcs);
+  if (!marks.getAttribute("viewBox")) {
+    marks.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    marks.setAttribute("preserveAspectRatio", "none");
+  }
+  const rows = discoveries.candidates.filter((row) => (
+    row.target_id === activeTarget
+    && Number(row.detector) === Number(frame.detector)
+    && Number(row.season_a) === Number(frame.season_a)
+    && Number(row.season_b) === Number(frame.season_b)
+  ));
+  for (const row of rows) {
+    const from = skyToPixel(wcs, row.ra_from, row.dec_from);
+    const to = skyToPixel(wcs, row.ra_to, row.dec_to);
+    if (!from || !to) continue;
+    const group = document.createElementNS(SVG, "g");
+    group.setAttribute("class", row.id === selectedDipole ? "dipole selected" : "dipole");
+    const hit = document.createElementNS(SVG, "line");
+    hit.setAttribute("class", "dipole-hit");
+    const line = document.createElementNS(SVG, "line");
+    line.setAttribute("class", "dipole-line");
+    for (const node of [hit, line]) {
+      node.setAttribute("x1", String(from.x));
+      node.setAttribute("y1", String(from.y));
+      node.setAttribute("x2", String(to.x));
+      node.setAttribute("y2", String(to.y));
+    }
+    group.append(hit, line, arrowHead(from, to));
+    group.addEventListener("click", (event) => {
+      event.stopPropagation();
+      selectedDipole = row.id;
+      showDipole(row);
+      renderDiscoveries();
+      drawDipoles();
+      writeUrl(sequence[index]);
+    });
+    marks.append(group);
+  }
+}
+
+// "Show in viewer": the difference of that detector and pair of seasons, with the arrow.
+async function focusDipole(row) {
+  selectedDipole = row.id;
+  layersOn.add("candidates");
+  searchPoint = null;
+  searchState = "";
+  await openRegion(row.target_id, {
+    detector: Number(row.detector),
+    mode: "difference",
+    season: `${row.season_a}-${row.season_b}`,
+    scroll: true,
+  });
+  showDipole(row);
+  renderDiscoveries();
 }
 
 function drawCatalog(rows, picture) {
@@ -1426,19 +1668,42 @@ function drawCatalog(rows, picture) {
     const limit = magLimit(row.catalog);
     return limit == null || row.mag == null || row.mag === "" || Number(row.mag) <= limit;
   });
+  // Every source of the layers that are on is drawn (Gaia circles, CatWISE squares, SIMBAD
+  // diamonds, asteroids), as the challenge asks: catalogs of other telescopes over the image.
+  for (const row of listedSources) {
+    const pixel = skyToPixel(wcs, row.ra, row.dec);
+    if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) continue;
+    if (neutralPixel(raster, pixel.x, pixel.y)) continue;
+    const node = markerShape(row.catalog, pixel.x, pixel.y);
+    node.dataset.name = row.name;
+    marks.append(node);
+  }
   paintChosen();
 }
 
+function sameSource(node, row) {
+  return node.dataset.catalog === row.catalog && node.dataset.name === row.name;
+}
+
 function paintChosen() {
-  for (const marker of marks.querySelectorAll(".marker")) marker.remove();
+  for (const marker of marks.querySelectorAll(".marker.selected")) {
+    marker.classList.remove("selected");
+    if (marker.dataset.extra) marker.remove();
+  }
   if (!selectedSource || !catalogContext) return;
   const pixel = skyToPixel(catalogContext.wcs, selectedSource.ra, selectedSource.dec);
   const { width, height } = catalogContext;
   if (!pixel || pixel.x < 0 || pixel.y < 0 || pixel.x >= width || pixel.y >= height) return;
   if (neutralPixel(catalogContext.raster, pixel.x, pixel.y)) return;
-  const node = markerShape(selectedSource.catalog, pixel.x, pixel.y);
+  let node = [...marks.querySelectorAll(".marker")].find((item) => sameSource(item, selectedSource));
+  if (!node) {
+    // Hidden by the magnitude slider or a layer that is off: drawn only while it is selected.
+    node = markerShape(selectedSource.catalog, pixel.x, pixel.y);
+    node.dataset.name = selectedSource.name;
+    node.dataset.extra = "1";
+    marks.append(node);
+  }
   node.classList.add("selected");
-  marks.append(node);
   const chip = document.querySelector("#candidate-chip");
   const stage = document.querySelector("#sky-stage");
   if (!chip || !stage) return;
@@ -1521,6 +1786,7 @@ async function render() {
     }
     drawCatalog(sources, picture);
     drawCross();
+    drawDipoles();
     if (selectedSource) showSource(selectedSource);
     else {
       showSource(null);
@@ -1532,6 +1798,7 @@ async function render() {
     console.error(error);
     marks.replaceChildren();
     drawCross();
+    drawDipoles();
   }
   try {
     const [points, exposures, path] = await Promise.all([
@@ -1641,7 +1908,7 @@ function restartPreview() {
     const count = Math.max(gifFrames.length, 1);
     const at = gifStep % count;
     const frame = gifFrames[at];
-    if (frame) preview.src = skyFor(viewerPicture(frame));
+    if (frame) preview.src = skyFor(gifPicture(frame));
     paintGifSeasons(frame ? at : -1);
     gifStep += 1;
   };
@@ -1660,7 +1927,7 @@ async function makeGif() {
     );
     const encoder = GIFEncoder();
     for (const frame of gifFrames) {
-      const picture = await loadImage(skyFor(viewerPicture(frame)));
+      const picture = await loadImage(skyFor(gifPicture(frame)));
       const canvas = document.createElement("canvas");
       canvas.width = picture.naturalWidth;
       canvas.height = picture.naturalHeight;
@@ -1996,23 +2263,6 @@ document.querySelector("#gif-speed")?.addEventListener("click", (event) => {
 });
 document.querySelector("#gif-make")?.addEventListener("click", () => makeGif());
 document.querySelector("#gif-save")?.addEventListener("click", () => saveGif());
-document.querySelector("#analyze").addEventListener("click", () => {
-  const out = document.querySelector("#cnn-out");
-  if (selectedSource) {
-    showSource(selectedSource);
-    const score = Number(selectedSource.p_real);
-    if (Number.isFinite(score)) out.textContent += t("score", { value: (score * 100).toFixed(1) });
-    return;
-  }
-  const object = byObject.get(selectedId);
-  if (!object) {
-    out.textContent = t("pickMarker");
-    return;
-  }
-  const score = Number(object.p_real);
-  const scored = Number.isFinite(score) ? t("score", { value: (score * 100).toFixed(1) }) : t("noScore");
-  out.textContent = `${object.name}: ${statusOf(object).label}.${scored} ${reasonOf(object)}`;
-});
 window.addEventListener("keydown", (event) => {
   if (event.target.closest("input, textarea")) return;
   if (event.key === "ArrowRight") {
@@ -2033,6 +2283,7 @@ apply();
 renderRegions();
 onChange(() => {
   apply();
+  renderDiscoveries();
   const themeLabel = document.querySelector("#theme-label");
   if (themeLabel) themeLabel.textContent = t(document.documentElement.dataset.theme === "dark" ? "themeDark" : "themeLight");
   renderRegions();
@@ -2047,11 +2298,23 @@ onChange(() => {
   }
 });
 
+// While DuckDB and the tables come in, the viewer says what it is waiting for; the first
+// render then writes the target's name in #sector.
+window.addEventListener("serafim:loading", (event) => {
+  const { stage, mb } = event.detail || {};
+  if (stage === "engine") put("#sector", t("loadingEngine", { mb }));
+  else if (stage === "tables") put("#sector", t("loadingTables"));
+});
+
 try {
   const params = new URLSearchParams(location.search);
-  const [found, info, texts] = await Promise.all([targets(), meta(), loadGuide()]);
+  const [found, info, texts, foundDiscoveries] = await Promise.all([
+    targets(), meta(), loadGuide(), loadDiscoveries(),
+  ]);
   regionList = found;
   guide = texts;
+  discoveries = foundDiscoveries;
+  renderDiscoveries();
   goldTargets.clear();
   for (const row of found) goldTargets.set(row.target_id, row);
   const askedRa = parseRa(params.get("ra"));
@@ -2077,11 +2340,26 @@ try {
     : openingDetector(activeTarget);
   mode = params.has("mode") ? parseMode(params.get("mode")) : openingMode(activeTarget);
   layersOn = parseLayers(params.has("layers") ? params.get("layers") : null);
+  if (params.get("dipole")) {
+    selectedDipole = params.get("dipole");
+    layersOn.add("candidates");
+  }
   if (!params.has("season")) params.set("season", openingSeason(activeTarget));
   put("#updated", info?.run_date_utc
     ? t("tablesLoaded", { date: info.run_date_utc })
     : t("tablesLoaded", { date: "—" }));
+  // A visible version in the footer, so everyone can tell which build they are looking at:
+  // the commit the published gold was built from and its date (gold/meta.json).
+  if (info?.commit) {
+    put("#site-version", t("siteVersion", {
+      commit: String(info.commit).slice(0, 7),
+      date: String(info.run_date_utc || "").slice(0, 16).replace("T", " "),
+    }));
+  }
   if (match) await openRegion(match.target_id, { detector, season: params.get("season"), mode });
+  if (selectedDipole && discoveries?.candidates) {
+    showDipole(discoveries.candidates.find((row) => row.id === selectedDipole));
+  }
   if (location.hash) {
     const place = document.querySelector(location.hash);
     if (place) place.scrollIntoView();
@@ -2089,6 +2367,17 @@ try {
 } catch (error) {
   put("#updated", t("tablesDown"));
   put("#catalog-status", t("tablesDown"));
-  put("#cnn-out", t("tablesDown"));
+  put("#sector", t("tablesDown"));
+  const readout = document.querySelector("#cnn-out");
+  if (readout) {
+    // Usually a slow connection: DuckDB (35 MB) did not arrive in time. One click tries again.
+    readout.replaceChildren(document.createTextNode(`${t("tablesDown")} `));
+    const again = document.createElement("button");
+    again.type = "button";
+    again.className = "primary";
+    again.textContent = t("tryAgain");
+    again.addEventListener("click", () => location.reload());
+    readout.append(again);
+  }
   console.error(error);
 }
