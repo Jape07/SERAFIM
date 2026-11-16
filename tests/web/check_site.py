@@ -9,8 +9,10 @@ viewer image, and fails when:
 
 - the page throws an exception or logs a console error;
 - the viewer never shows an image, or shows a broken one;
-- a control that this page uses is missing from index.html;
-- the viewer does not open an image for the field.
+- a control that app.js handles is missing from index.html (this is what the redesign of
+  #83 broke: the data was published, the controls to see it were gone);
+- the difference view does not open a difference image;
+- the candidates section is empty.
 
 Exit code 1 and the reasons on stdout. Set SERAFIM_BROWSER to pick the browser.
 """
@@ -39,9 +41,11 @@ WEB = ROOT / "web"
 # Every id app.js reads without a guard, or that a visitor needs to use the challenge features.
 REQUIRED_IDS = [
     "frame", "marks", "slider", "region-cards", "sector", "sky-ra", "sky-dec",
-    "cnn-out", "csv", "compare-images", "analyze",
+    "detectors", "modes", "layers", "mag-reach", "play", "spectrum", "spectrum-plot",
+    "flag-notes", "saturated-badge", "cnn-out", "csv", "compare-images",
     "search-form", "search-ra", "search-dec", "fov",
-    "gif-make", "gif-preview", "gif-seasons", "help",
+    "candidates", "dip-title", "dip-targets", "dip-foot", "dipole-detail",
+    "gif-make", "gif-preview", "help", "help-dipole", "help-ai",
 ]
 
 BROWSERS = [
@@ -63,7 +67,11 @@ STATE_JS = r"""(() => {
     frame_src: (frame?.getAttribute("src") || "").split("/gold/")[1] || "",
     frame_width: frame ? frame.naturalWidth : 0,
     missing_ids: __IDS__.filter((id) => !q("#" + id)),
+    detectors: qa("#detectors button").length,
+    modes: qa("#modes button").length,
+    layers: qa("#layers button").length,
     regions: qa("#region-cards article").length,
+    candidate_blocks: qa("#dip-targets .target-block").length,
     broken_images: broken,
     sector: (q("#sector")?.textContent || "").trim(),
   });
@@ -164,7 +172,7 @@ class Browser:
                 pass
             self.ws.settimeout(60)
             state = self.evaluate(STATE_JS) or {}
-            if state.get("frame_width") and state.get("regions", 0) >= 5:
+            if state.get("frame_width") and state.get("candidate_blocks"):
                 time.sleep(2)  # let the catalog and the spectrum finish
                 return self.evaluate(STATE_JS) or {}
         return state
@@ -210,10 +218,19 @@ def check(state: dict, problems: list[str], *, difference: bool) -> list[str]:
         failures.append(f"missing in index.html: {', '.join(state['missing_ids'])}")
     if state.get("broken_images"):
         failures.append(f"broken images: {state['broken_images']}")
+    if state.get("detectors", 0) < 8:
+        failures.append(f"{state.get('detectors')} detector buttons, expected 8 (D1-D6, All, "
+                        "Color)")
+    if state.get("modes", 0) < 4:
+        failures.append(f"{state.get('modes')} mode buttons, expected 4")
+    if state.get("layers", 0) < 5:
+        failures.append(f"{state.get('layers')} layer buttons, expected 5")
     if state.get("regions", 0) < 5:
         failures.append(f"{state.get('regions')} region cards, expected 5")
-    if difference and not str(state.get("frame_src", "")).split("/")[-1].startswith("sum_"):
-        failures.append(f"difference mode shows {state.get('frame_src')!r}, not the season sum")
+    if state.get("candidate_blocks", 0) < 5:
+        failures.append(f"{state.get('candidate_blocks')} candidate blocks, expected 5")
+    if difference and not str(state.get("frame_src", "")).split("/")[-1].startswith("diff_"):
+        failures.append(f"difference mode shows {state.get('frame_src')!r}, not a diff_ image")
     return failures
 
 
@@ -248,7 +265,9 @@ def main(argv: list[str] | None = None) -> int:
                 found = check(state, browser.problems(), difference=difference)
                 verdict = "ok" if not found else "FAILED"
                 print(f"{name}: {verdict} · image {state.get('frame_src')!r} · "
-                      f"{state.get('regions')} regions")
+                      f"{state.get('detectors')} detectors, {state.get('modes')} modes, "
+                      f"{state.get('layers')} layers, {state.get('candidate_blocks')} "
+                      "candidate blocks")
                 for item in found:
                     print(f"  - {item}")
                 failures += [f"{name}: {item}" for item in found]
